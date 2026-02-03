@@ -1,4 +1,28 @@
 document.addEventListener("DOMContentLoaded", function() {
+    // Mobile sidebar toggle
+    const menuToggle = document.querySelector(".menu-toggle");
+    const sidebarOverlay = document.querySelector(".sidebar-overlay");
+    const app = document.querySelector(".app");
+
+    function closeSidebar() {
+        app.classList.remove("sidebar-open");
+    }
+
+    if (menuToggle) {
+        menuToggle.addEventListener("click", function() {
+            app.classList.toggle("sidebar-open");
+        });
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", closeSidebar);
+    }
+
+    // Close sidebar when clicking a nav link (mobile)
+    document.querySelectorAll(".sidebar-nav a").forEach(function(link) {
+        link.addEventListener("click", closeSidebar);
+    });
+
     // Mark articles as read when clicked
     document.querySelectorAll(".article-title a").forEach(function(link) {
         link.addEventListener("click", function() {

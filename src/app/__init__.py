@@ -1,4 +1,5 @@
 import atexit
+import os
 
 from flask import Flask
 from src.app.database import init_db
@@ -11,7 +12,7 @@ def create_app(config: dict | None = None) -> Flask:
         static_folder="../static"
     )
 
-    app.config["DATABASE"] = "myfeeds.db"
+    app.config["DATABASE"] = os.environ.get("DATABASE_PATH", "myfeeds.db")
     app.config["SECRET_KEY"] = "dev-secret-key-change-in-production"
     app.config["SCHEDULER_ENABLED"] = True
 

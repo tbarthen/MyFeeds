@@ -1,0 +1,14 @@
+services:
+  myfeeds:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - myfeeds-data:/app/data
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_PATH=/app/data/myfeeds.db
+    restart: unless-stopped
+
+volumes:
+  myfeeds-data:
