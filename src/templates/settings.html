@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - MyFeeds{% endblock %}
+
+{% block content %}
+<aside class="sidebar">
+    <header class="sidebar-header">
+        <h1><a href="{{ url_for('main.index') }}">MyFeeds</a></h1>
+    </header>
+
+    <nav class="sidebar-nav">
+        <a href="{{ url_for('main.index') }}" class="nav-row">
+            <span class="icon">&#x1F4E5;</span>
+            <span class="label">All Feeds</span>
+            {% if total_unread > 0 %}
+            <span class="count">{{ total_unread }}</span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('main.saved_articles') }}" class="nav-row">
+            <span class="icon">&starf;</span>
+            <span class="label">Saved</span>
+            {% if saved_count > 0 %}
+            <span class="count">{{ saved_count }}</span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('main.filtered_view') }}" class="nav-row">
+            <span class="icon danger">&empty;</span>
+            <span class="label">Filtered (Review)</span>
+            {% if filtered_count > 0 %}
+            <span class="count">{{ filtered_count }}</span>
+            {% endif %}
+        </a>
+    </nav>
+
+    <footer class="sidebar-footer">
+        <a href="{{ url_for('main.filters_page') }}">&#x2699; Filters</a>
+        <a href="{{ url_for('main.settings_page') }}" class="active">&#x2630; Settings</a>
+    </footer>
+</aside>
+
+<main class="content">
+    <header class="content-header">
+        <h2>Settings</h2>
+    </header>
+
+    <div class="settings-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <section class="settings-section">
+            <h3>Auto-Refresh</h3>
+            <form action="{{ url_for('main.save_settings') }}" method="post" class="settings-form">
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="auto_refresh" value="1"
+                               {% if settings.auto_refresh_enabled == "1" %}checked{% endif %}>
+                        Enable automatic feed refresh
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="refresh_interval">Refresh interval (minutes)</label>
+                    <input type="number" id="refresh_interval" name="refresh_interval"
+                           value="{{ settings.refresh_interval_minutes }}"
+                           min="5" max="1440" step="5">
+                    <small>Min: 5 minutes, Max: 24 hours (1440 minutes)</small>
+                </div>
+                <button type="submit" class="btn">Save Settings</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
+            <h3>Import Feeds</h3>
+            <p>Import feeds from an OPML file (exported from Feedly, etc.)</p>
+            <form action="{{ url_for('main.import_opml') }}" method="post" enctype="multipart/form-data" class="settings-form">
+                <div class="form-group">
+                    <label for="opml_file">OPML File</label>
+                    <input type="file" id="opml_file" name="opml_file" accept=".opml,.xml">
+                </div>
+                <button type="submit" class="btn">Import OPML</button>
+            </form>
+        </section>
+    </div>
+</main>
+{% endblock %}

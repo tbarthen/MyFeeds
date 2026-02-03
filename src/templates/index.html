@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block content %}
+<aside class="sidebar">
+    <header class="sidebar-header">
+        <h1>MyFeeds</h1>
+        <form action="{{ url_for('main.refresh_all_feeds') }}" method="post">
+            <button type="submit" class="btn">Refresh</button>
+        </form>
+    </header>
+
+    <form action="{{ url_for('main.add_feed') }}" method="post" class="add-feed-form">
+        <input type="url" name="url" placeholder="Add feed URL..." required>
+        <button type="submit">+</button>
+    </form>
+
+    <nav class="sidebar-nav">
+        <!-- Smart Views -->
+        <a href="{{ url_for('main.index', unread=unread_only|int) }}"
+           class="nav-row {% if not selected_feed_id and view_mode != 'saved' %}active{% endif %}">
+            <span class="icon">&#x1F4E5;</span>
+            <span class="label">All Feeds</span>
+            {% if total_unread > 0 %}
+            <span class="count">{{ total_unread }}</span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('main.saved_articles') }}"
+           class="nav-row {% if view_mode == 'saved' %}active{% endif %}">
+            <span class="icon">&starf;</span>
+            <span class="label">Saved</span>
+            {% if saved_count > 0 %}
+            <span class="count">{{ saved_count }}</span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('main.filtered_view') }}" class="nav-row">
+            <span class="icon danger">&empty;</span>
+            <span class="label">Filtered (Review)</span>
+            {% if filtered_count > 0 %}
+            <span class="count">{{ filtered_count }}</span>
+            {% endif %}
+        </a>
+
+        <div class="divider"></div>
+        <div class="section-header">Subscriptions</div>
+
+        <!-- Feeds -->
+        {% for feed in feeds %}
+        <div class="nav-row {% if selected_feed_id == feed.id %}active{% endif %}">
+            <a href="{{ url_for('main.index', feed_id=feed.id, unread=unread_only|int) }}"
+               class="nav-row-link"
+               title="{{ feed.title or feed.url }}">
+                <span class="icon">&#x25CB;</span>
+                <span class="label {% if feed.fetch_error_count >= 3 %}error{% endif %}">{{ feed.title or feed.url }}</span>
+                {% if feed.unread_count > 0 %}
+                <span class="count">{{ feed.unread_count }}</span>
+                {% endif %}
+                {% if feed.fetch_error_count >= 3 %}
+                <span class="error-icon" title="{{ feed.last_error }}">!</span>
+                {% endif %}
+            </a>
+            <span class="feed-actions">
+                <form action="{{ url_for('main.refresh_feed', feed_id=feed.id) }}" method="post" class="inline-form">
+                    <button type="submit" class="btn-icon" title="Refresh">&#x21bb;</button>
+                </form>
+                <form action="{{ url_for('main.delete_feed', feed_id=feed.id) }}" method="post" class="inline-form"
+                      onsubmit="return confirm('Delete this feed?')">
+                    <button type="submit" class="btn-icon btn-danger" title="Delete">&times;</button>
+                </form>
+            </span>
+        </div>
+        {% endfor %}
+    </nav>
+
+    <footer class="sidebar-footer">
+        <a href="{{ url_for('main.filters_page') }}">&#x2699; Filters</a>
+        <a href="{{ url_for('main.settings_page') }}">&#x2630; Settings</a>
+    </footer>
+</aside>
+
+<main class="content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages" style="padding: 12px 24px;">
+            {% for category, message in messages %}
+            <div class="flash-message flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <header class="content-header">
+        {% if view_mode == 'saved' %}
+        <div class="search-box">
+            <input type="text" id="article-search" placeholder="Search articles..." autocomplete="off">
+            <button type="button" class="search-clear" title="Clear">&times;</button>
+        </div>
+        <h2 class="view-title">Saved Articles</h2>
+        {% else %}
+        <div class="search-box">
+            <input type="text" id="article-search" placeholder="Search articles..." autocomplete="off">
+            <button type="button" class="search-clear" title="Clear">&times;</button>
+        </div>
+        <div class="toolbar-group">
+            <a href="{{ url_for('main.index', feed_id=selected_feed_id) }}"
+               class="btn-toolbar {% if not unread_only %}active{% endif %}">All</a>
+            <a href="{{ url_for('main.index', feed_id=selected_feed_id, unread=1) }}"
+               class="btn-toolbar {% if unread_only %}active{% endif %}">Unread</a>
+        </div>
+        <form action="{{ url_for('main.mark_all_read', feed_id=selected_feed_id) }}" method="post">
+            <button type="submit" class="btn-toolbar">Mark All Read</button>
+        </form>
+        {% endif %}
+    </header>
+
+    <div class="article-list">
+        {% if not articles %}
+        <p class="empty-state">
+            {% if view_mode == 'saved' %}
+            No saved articles yet. Click the star icon on any article to save it for later.
+            {% else %}
+            No articles to display.
+            {% endif %}
+        </p>
+        {% endif %}
+
+        {% for article in articles %}
+        <article class="article-item {% if article.is_read %}is-read{% endif %}" data-id="{{ article.id }}">
+            <div class="article-meta">
+                <span class="article-source">{{ article.feed_title }}</span>
+                {% if article.published_at %}
+                <span>•</span>
+                <time class="article-date">{{ article.published_at.strftime('%b %d, %Y') }}</time>
+                {% endif %}
+            </div>
+            <h2 class="article-title">
+                <a href="{{ article.url }}" target="_blank" rel="noopener"
+                   data-article-id="{{ article.id }}">{{ article.title }}</a>
+            </h2>
+            {% if article.summary %}
+            <p class="article-summary">{{ article.summary|striptags|truncate(200) }}</p>
+            {% endif %}
+            <div class="article-actions">
+                <form action="{{ url_for('main.toggle_save', article_id=article.id) }}" method="post" class="inline-form">
+                    <button type="submit" class="btn-star {% if article.is_saved %}active{% endif %}"
+                            title="{{ 'Unsave' if article.is_saved else 'Save for later' }}">
+                        {{ '★' if article.is_saved else '☆' }}
+                    </button>
+                </form>
+                {% if article.is_read %}
+                <form action="{{ url_for('main.mark_unread', article_id=article.id) }}" method="post" class="inline-form">
+                    <button type="submit" class="btn-small">Mark Unread</button>
+                </form>
+                {% else %}
+                <form action="{{ url_for('main.mark_read', article_id=article.id) }}" method="post" class="inline-form">
+                    <button type="submit" class="btn-small">Mark Read</button>
+                </form>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</main>
+{% endblock %}

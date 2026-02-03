@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyFeeds - Sidebar Mockup v2</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      color: #202124;
+      background: #f8f9fa;
+    }
+    
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      background: #fff;
+      border-right: 1px solid #dadce0;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid #e8eaed;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .sidebar-header h1 {
+      font-size: 18px;
+      font-weight: 500;
+    }
+    
+    .btn-primary {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .btn-primary:hover {
+      background: #1557b0;
+    }
+    
+    .add-feed {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e8eaed;
+      display: flex;
+      gap: 8px;
+    }
+    
+    .add-feed input {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      outline: none;
+      min-width: 0;
+    }
+    
+    .add-feed input:focus {
+      border-color: #1a73e8;
+    }
+    
+    .add-feed button {
+      padding: 8px 12px;
+      font-size: 18px;
+      background: transparent;
+      color: #1a73e8;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    
+    .add-feed button:hover {
+      background: #f1f3f4;
+    }
+    
+    /* Navigation */
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    
+    .nav-row {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: left;
+      margin-bottom: 2px;
+      transition: background-color 0.15s;
+    }
+    
+    .nav-row:hover {
+      background: #f1f3f4;
+    }
+    
+    .nav-row.active {
+      background: #e8f0fe;
+    }
+    
+    .nav-row .icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+      color: #5f6368;
+    }
+    
+    .nav-row .label {
+      flex: 1;
+      font-size: 14px;
+      color: #202124;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .nav-row.active .label {
+      font-weight: 600;
+    }
+    
+    .nav-row .label.error {
+      color: #d93025;
+    }
+    
+    .nav-row .count {
+      font-size: 12px;
+      font-weight: 500;
+      color: #5f6368;
+      min-width: 20px;
+      text-align: right;
+    }
+    
+    .nav-row .error-icon {
+      color: #d93025;
+      font-size: 14px;
+    }
+    
+    .divider {
+      height: 1px;
+      background: #e8eaed;
+      margin: 8px 12px;
+    }
+    
+    .section-header {
+      padding: 8px 12px 4px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #5f6368;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    /* Footer */
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid #e8eaed;
+      display: flex;
+      gap: 16px;
+    }
+    
+    .sidebar-footer button {
+      background: none;
+      border: none;
+      font-size: 13px;
+      color: #5f6368;
+      cursor: pointer;
+      padding: 0;
+    }
+    
+    .sidebar-footer button:hover {
+      color: #1a73e8;
+    }
+    
+    /* Main content */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+    }
+    
+    .toolbar {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      border-bottom: 1px solid #dadce0;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .toolbar-group {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .btn-toolbar {
+      padding: 6px 14px;
+      font-size: 13px;
+      background: #fff;
+      color: #3c4043;
+      border: 1px solid #dadce0;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .btn-toolbar:hover {
+      background: #f1f3f4;
+    }
+    
+    .btn-toolbar.active {
+      background: #1a73e8;
+      color: white;
+      border-color: #1a73e8;
+    }
+    
+    .articles {
+      padding: 16px 24px;
+    }
+    
+    .article {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #dadce0;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    
+    .article-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #5f6368;
+      margin-bottom: 8px;
+    }
+    
+    .article-meta .source {
+      font-weight: 500;
+      color: #202124;
+    }
+    
+    .article h2 {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    
+    .article p {
+      font-size: 13px;
+      color: #5f6368;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    
+    .article-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .btn-star {
+      background: none;
+      border: none;
+      color: #dadce0;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    
+    .btn-star:hover {
+      color: #fbbc04;
+    }
+    
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .btn-small:hover {
+      background: #1557b0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      
+      <!-- Header -->
+      <div class="sidebar-header">
+        <h1>MyFeeds</h1>
+        <button class="btn-primary">Refresh</button>
+      </div>
+      
+      <!-- Add Feed -->
+      <div class="add-feed">
+        <input type="text" placeholder="Add feed URL...">
+        <button>+</button>
+      </div>
+      
+      <!-- Navigation -->
+      <nav class="sidebar-nav">
+        
+        <!-- Smart Views -->
+        <button class="nav-row active">
+          <span class="icon">📥</span>
+          <span class="label">All Feeds</span>
+          <span class="count">213</span>
+        </button>
+        
+        <button class="nav-row">
+          <span class="icon">★</span>
+          <span class="label">Saved</span>
+          <span class="count">3</span>
+        </button>
+        
+        <button class="nav-row">
+          <span class="icon">🚫</span>
+          <span class="label">Filtered (Review)</span>
+          <span class="count">12</span>
+        </button>
+        
+        <div class="divider"></div>
+        
+        <div class="section-header">Subscriptions</div>
+        
+        <!-- Feeds -->
+        <button class="nav-row">
+          <span class="icon">○</span>
+          <span class="label error">AI | The Verge</span>
+          <span class="count">10</span>
+          <span class="error-icon">⚠</span>
+        </button>
+        
+        <button class="nav-row">
+          <span class="icon">○</span>
+          <span class="label">Lifehacker</span>
+          <span class="count">115</span>
+        </button>
+        
+        <button class="nav-row">
+          <span class="icon">○</span>
+          <span class="label error">Multiple Sclerosis News Today – The Web's Daily Resource</span>
+          <span class="count">8</span>
+          <span class="error-icon">⚠</span>
+        </button>
+        
+        <button class="nav-row">
+          <span class="icon">○</span>
+          <span class="label">Scientific American</span>
+          <span class="count">60</span>
+        </button>
+        
+        <button class="nav-row">
+          <span class="icon">○</span>
+          <span class="label">XDA</span>
+          <span class="count">20</span>
+        </button>
+        
+      </nav>
+      
+      <!-- Footer -->
+      <div class="sidebar-footer">
+        <button>⚙ Filters</button>
+        <button>☰ Settings</button>
+      </div>
+      
+    </aside>
+    
+    <!-- Main Content -->
+    <main class="main">
+      
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <button class="btn-toolbar active">All</button>
+          <button class="btn-toolbar">Unread</button>
+        </div>
+        <button class="btn-toolbar">Mark All Read</button>
+      </div>
+      
+      <div class="articles">
+        
+        <article class="article">
+          <div class="article-meta">
+            <span class="source">XDA</span>
+            <span>•</span>
+            <span>Feb 03, 2026</span>
+          </div>
+          <h2>This password manager combines the best of cloud and self-hosted</h2>
+          <p>The hybrid solution gives you flexibility without sacrificing security...</p>
+          <div class="article-actions">
+            <button class="btn-star">☆</button>
+            <button class="btn-small">Mark Read</button>
+          </div>
+        </article>
+        
+        <article class="article">
+          <div class="article-meta">
+            <span class="source">Scientific American</span>
+            <span>•</span>
+            <span>Feb 03, 2026</span>
+          </div>
+          <h2>Why the Hubble Space Telescope still matters</h2>
+          <p>The venerable observatory is going strong despite decades in space...</p>
+          <div class="article-actions">
+            <button class="btn-star">☆</button>
+            <button class="btn-small">Mark Read</button>
+          </div>
+        </article>
+        
+        <article class="article">
+          <div class="article-meta">
+            <span class="source">Lifehacker</span>
+            <span>•</span>
+            <span>Feb 02, 2026</span>
+          </div>
+          <h2>I turned my old tablet into a professional planner</h2>
+          <p>Transform your old tablet into a productivity powerhouse with this simple trick...</p>
+          <div class="article-actions">
+            <button class="btn-star">☆</button>
+            <button class="btn-small">Mark Read</button>
+          </div>
+        </article>
+        
+      </div>
+      
+    </main>
+    
+  </div>
+</body>
+</html>

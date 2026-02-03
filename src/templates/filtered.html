@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Filtered Articles - MyFeeds{% endblock %}
+
+{% block content %}
+<aside class="sidebar">
+    <header class="sidebar-header">
+        <h1><a href="{{ url_for('main.index') }}">MyFeeds</a></h1>
+    </header>
+
+    <nav class="sidebar-nav">
+        <a href="{{ url_for('main.index') }}" class="nav-row">
+            <span class="icon">&#x1F4E5;</span>
+            <span class="label">All Feeds</span>
+            {% if total_unread > 0 %}
+            <span class="count">{{ total_unread }}</span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('main.saved_articles') }}" class="nav-row">
+            <span class="icon">&starf;</span>
+            <span class="label">Saved</span>
+            {% if saved_count > 0 %}
+            <span class="count">{{ saved_count }}</span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('main.filtered_view') }}" class="nav-row active">
+            <span class="icon danger">&empty;</span>
+            <span class="label">Filtered (Review)</span>
+            {% if filtered_count > 0 %}
+            <span class="count">{{ filtered_count }}</span>
+            {% endif %}
+        </a>
+    </nav>
+
+    <footer class="sidebar-footer">
+        <a href="{{ url_for('main.filters_page') }}">&#x2699; Filters</a>
+        <a href="{{ url_for('main.settings_page') }}">&#x2630; Settings</a>
+    </footer>
+</aside>
+
+<main class="content">
+    <header class="content-header">
+        <div class="search-box">
+            <input type="text" id="article-search" placeholder="Search articles..." autocomplete="off">
+            <button type="button" class="search-clear" title="Clear">&times;</button>
+        </div>
+        <div>
+            <h2>Filtered Articles</h2>
+            <p class="subtitle">Review articles caught by your filters</p>
+        </div>
+    </header>
+
+    {% if not filtered_by_rule %}
+    <p class="empty-state">No filtered articles yet. Articles matching your filters will appear here.</p>
+    {% endif %}
+
+    {% for filter, articles in filtered_by_rule %}
+    <section class="filter-group">
+        <header class="filter-group-header">
+            <h3>{{ filter.name }}</h3>
+            <code class="filter-pattern">{{ filter.pattern }}</code>
+            <span class="match-count">{{ articles|length }} article{{ "s" if articles|length != 1 else "" }}</span>
+        </header>
+
+        <div class="article-list">
+            {% for article in articles %}
+            <article class="article-item {% if article.is_read %}is-read{% endif %}" data-id="{{ article.id }}">
+                <div class="article-meta">
+                    <span class="article-source">{{ article.feed_title }}</span>
+                    {% if article.published_at %}
+                    <span>•</span>
+                    <time class="article-date">{{ article.published_at.strftime('%b %d, %Y') }}</time>
+                    {% endif %}
+                </div>
+                <h4 class="article-title">
+                    <a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a>
+                </h4>
+                {% if article.summary %}
+                <p class="article-summary">{{ article.summary|striptags|truncate(200) }}</p>
+                {% endif %}
+                <div class="article-actions">
+                    {% if article.is_read %}
+                    <form action="{{ url_for('main.mark_unread', article_id=article.id) }}" method="post" class="inline-form">
+                        <button type="submit" class="btn-small">Mark Unread</button>
+                    </form>
+                    {% else %}
+                    <form action="{{ url_for('main.mark_read', article_id=article.id) }}" method="post" class="inline-form">
+                        <button type="submit" class="btn-small">Mark Read</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+</main>
+{% endblock %}

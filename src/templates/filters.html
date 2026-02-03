@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Filters - MyFeeds{% endblock %}
+
+{% block content %}
+<aside class="sidebar">
+    <header class="sidebar-header">
+        <h1><a href="{{ url_for('main.index') }}">MyFeeds</a></h1>
+    </header>
+
+    <nav class="sidebar-nav">
+        <a href="{{ url_for('main.index') }}" class="nav-row">
+            <span class="icon">&#x1F4E5;</span>
+            <span class="label">All Feeds</span>
+            {% if total_unread > 0 %}
+            <span class="count">{{ total_unread }}</span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('main.saved_articles') }}" class="nav-row">
+            <span class="icon">&starf;</span>
+            <span class="label">Saved</span>
+            {% if saved_count > 0 %}
+            <span class="count">{{ saved_count }}</span>
+            {% endif %}
+        </a>
+
+        <a href="{{ url_for('main.filtered_view') }}" class="nav-row">
+            <span class="icon danger">&empty;</span>
+            <span class="label">Filtered (Review)</span>
+            {% if filtered_count > 0 %}
+            <span class="count">{{ filtered_count }}</span>
+            {% endif %}
+        </a>
+    </nav>
+
+    <footer class="sidebar-footer">
+        <a href="{{ url_for('main.filters_page') }}" class="active">&#x2699; Filters</a>
+        <a href="{{ url_for('main.settings_page') }}">&#x2630; Settings</a>
+    </footer>
+</aside>
+
+<main class="content">
+    <header class="content-header">
+        <h2>Filters</h2>
+    </header>
+
+    <div class="filter-list">
+        {% if not filters %}
+        <p class="empty-state">No filters yet. Create one below.</p>
+        {% endif %}
+
+        {% for filter in filters %}
+        <div class="filter-item {% if not filter.is_active %}inactive{% endif %}">
+            <div class="filter-info">
+                <strong class="filter-name">{{ filter.name }}</strong>
+                <code class="filter-pattern">{{ filter.pattern }}</code>
+                <span class="filter-target">Target: {{ filter.target }}</span>
+                <span class="filter-matches">{{ filter_counts.get(filter.id, 0) }} matches</span>
+            </div>
+            <div class="filter-actions">
+                <form action="{{ url_for('main.toggle_filter', filter_id=filter.id) }}" method="post" class="inline-form">
+                    <button type="submit" class="btn-small">
+                        {{ "Disable" if filter.is_active else "Enable" }}
+                    </button>
+                </form>
+                <form action="{{ url_for('main.delete_filter', filter_id=filter.id) }}" method="post" class="inline-form"
+                      onsubmit="return confirm('Delete this filter?')">
+                    <button type="submit" class="btn-small btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="add-filter-section">
+        <h3>Add New Filter</h3>
+        <form action="{{ url_for('main.add_filter') }}" method="post" class="add-filter-form">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" placeholder="e.g., Sports News" required>
+            </div>
+            <div class="form-group">
+                <label for="pattern">Regex Pattern</label>
+                <input type="text" id="pattern" name="pattern" placeholder="e.g., \b(football|soccer|nfl)\b" required>
+            </div>
+            <div class="form-group">
+                <label for="target">Apply to</label>
+                <select id="target" name="target">
+                    <option value="both">Title & Summary</option>
+                    <option value="title">Title only</option>
+                    <option value="summary">Summary only</option>
+                </select>
+            </div>
+            <button type="submit" class="btn">Add Filter</button>
+        </form>
+    </div>
+</main>
+{% endblock %}
