@@ -79,8 +79,8 @@
         </section>
 
         <section class="settings-section">
-            <h3>Import Feeds</h3>
-            <p>Import feeds from an OPML file (exported from Feedly, etc.)</p>
+            <h3>Import / Export Feeds</h3>
+            <p>Import feeds from an OPML file or export your current subscriptions.</p>
             <form action="{{ url_for('main.import_opml') }}" method="post" enctype="multipart/form-data" class="settings-form">
                 <div class="form-group">
                     <label for="opml_file">OPML File</label>
@@ -88,6 +88,7 @@
                 </div>
                 <button type="submit" class="btn">Import OPML</button>
             </form>
+            <a href="{{ url_for('main.export_opml') }}" class="btn" style="display: inline-block; margin-top: 12px;">Export OPML</a>
         </section>
     </div>
 </main>

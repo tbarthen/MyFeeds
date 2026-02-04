@@ -30,6 +30,28 @@ def parse_opml(content: str | bytes) -> list[OPMLFeed]:
     return feeds
 
 
+def export_opml() -> str:
+    feeds = feed_service.get_all_feeds()
+
+    opml = ET.Element("opml", version="2.0")
+    head = ET.SubElement(opml, "head")
+    ET.SubElement(head, "title").text = "MyFeeds Subscriptions"
+    body = ET.SubElement(opml, "body")
+
+    for feed in feeds:
+        attrs = {
+            "type": "rss",
+            "text": feed.title or feed.url,
+            "title": feed.title or feed.url,
+            "xmlUrl": feed.url,
+        }
+        if feed.site_url:
+            attrs["htmlUrl"] = feed.site_url
+        ET.SubElement(body, "outline", **attrs)
+
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(opml, encoding="unicode")
+
+
 def import_opml(content: str | bytes) -> tuple[int, int, list[str]]:
     feeds = parse_opml(content)
 

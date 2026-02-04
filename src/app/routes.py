@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, Response
 
 from src.app.services import feed_service, article_service, filter_service, settings_service, opml_service
 
@@ -304,3 +304,13 @@ def import_opml():
             flash(error, "error")
 
     return redirect(url_for("main.settings_page"))
+
+
+@bp.route("/feeds/export")
+def export_opml():
+    opml_xml = opml_service.export_opml()
+    return Response(
+        opml_xml,
+        mimetype="application/xml",
+        headers={"Content-Disposition": "attachment; filename=myfeeds.opml"}
+    )

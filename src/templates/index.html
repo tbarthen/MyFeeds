@@ -17,12 +17,11 @@
     <nav class="sidebar-nav">
         <!-- Smart Views -->
         <a href="{{ url_for('main.index', unread=unread_only|int) }}"
-           class="nav-row {% if not selected_feed_id and view_mode != 'saved' %}active{% endif %}">
+           class="nav-row {% if not selected_feed_id and view_mode != 'saved' %}active{% endif %}"
+           data-feed-id="all">
             <span class="icon">&#x1F4E5;</span>
             <span class="label">All Feeds</span>
-            {% if total_unread > 0 %}
-            <span class="count">{{ total_unread }}</span>
-            {% endif %}
+            <span class="count" {% if total_unread == 0 %}style="display:none"{% endif %}>{{ total_unread }}</span>
         </a>
 
         <a href="{{ url_for('main.saved_articles') }}"
@@ -47,15 +46,13 @@
 
         <!-- Feeds -->
         {% for feed in feeds %}
-        <div class="nav-row {% if selected_feed_id == feed.id %}active{% endif %}">
+        <div class="nav-row {% if selected_feed_id == feed.id %}active{% endif %}" data-feed-id="{{ feed.id }}">
             <a href="{{ url_for('main.index', feed_id=feed.id, unread=unread_only|int) }}"
                class="nav-row-link"
                title="{{ feed.title or feed.url }}">
                 <span class="icon">&#x25CB;</span>
                 <span class="label {% if feed.fetch_error_count >= 3 %}error{% endif %}">{{ feed.title or feed.url }}</span>
-                {% if feed.unread_count > 0 %}
-                <span class="count">{{ feed.unread_count }}</span>
-                {% endif %}
+                <span class="count" {% if feed.unread_count == 0 %}style="display:none"{% endif %}>{{ feed.unread_count }}</span>
                 {% if feed.fetch_error_count >= 3 %}
                 <span class="error-icon" title="{{ feed.last_error }}">!</span>
                 {% endif %}
@@ -127,7 +124,7 @@
         {% endif %}
 
         {% for article in articles %}
-        <article class="article-item {% if article.is_read %}is-read{% endif %} {% if article.is_saved %}is-saved{% endif %}" data-id="{{ article.id }}">
+        <article class="article-item {% if article.is_read %}is-read{% endif %} {% if article.is_saved %}is-saved{% endif %}" data-id="{{ article.id }}" data-feed-id="{{ article.feed_id }}">
             <div class="article-content">
                 <div class="article-text">
                     <div class="article-meta">

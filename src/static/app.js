@@ -4,6 +4,32 @@ document.addEventListener("DOMContentLoaded", function() {
         return window.location.search.includes("unread=1");
     }
 
+    // Update sidebar unread counts after marking read/unread
+    function updateUnreadCount(feedId, delta) {
+        // Update the specific feed's count
+        var feedRow = document.querySelector('.nav-row[data-feed-id="' + feedId + '"]');
+        if (feedRow) {
+            var countEl = feedRow.querySelector(".count");
+            if (countEl) {
+                var current = parseInt(countEl.textContent) || 0;
+                var updated = Math.max(0, current + delta);
+                countEl.textContent = updated;
+                countEl.style.display = updated > 0 ? "" : "none";
+            }
+        }
+        // Update "All Feeds" count
+        var allRow = document.querySelector('.nav-row[data-feed-id="all"]');
+        if (allRow) {
+            var allCount = allRow.querySelector(".count");
+            if (allCount) {
+                var currentAll = parseInt(allCount.textContent) || 0;
+                var updatedAll = Math.max(0, currentAll + delta);
+                allCount.textContent = updatedAll;
+                allCount.style.display = updatedAll > 0 ? "" : "none";
+            }
+        }
+    }
+
     // Handle marking article as read with flash and optional collapse
     function markAsReadWithAnimation(article) {
         article.classList.add("just-read");
@@ -55,12 +81,15 @@ document.addEventListener("DOMContentLoaded", function() {
             const articleId = this.dataset.articleId;
             if (!articleId) return;
 
+            var articleEl = document.querySelector('.article-item[data-id="' + articleId + '"]');
+            if (articleEl && articleEl.classList.contains("is-read")) return;
+
             fetch("/articles/" + articleId + "/read", {
                 method: "POST",
                 headers: { "X-Requested-With": "XMLHttpRequest" }
             }).then(function() {
-                const articleEl = document.querySelector('.article-item[data-id="' + articleId + '"]');
                 if (articleEl) {
+                    updateUnreadCount(articleEl.dataset.feedId, -1);
                     markAsReadWithAnimation(articleEl);
                 }
             });
@@ -81,6 +110,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 method: "POST",
                 headers: { "X-Requested-With": "XMLHttpRequest" }
             }).then(function() {
+                updateUnreadCount(article.dataset.feedId, -1);
                 if (isUnreadView()) {
                     markAsReadWithAnimation(article);
                 } else {
@@ -149,9 +179,11 @@ document.addEventListener("DOMContentLoaded", function() {
                 }).then(function() {
                     if (!isRead) {
                         // Marking as read - flash first, then collapse if in unread view
+                        updateUnreadCount(article.dataset.feedId, -1);
                         markAsReadWithAnimation(article);
                     } else {
                         // Marking as unread - no flash
+                        updateUnreadCount(article.dataset.feedId, 1);
                         article.classList.remove("is-read");
                     }
                 });
