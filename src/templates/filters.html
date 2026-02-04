@@ -53,23 +53,49 @@
 
         {% for filter in filters %}
         <div class="filter-item {% if not filter.is_active %}inactive{% endif %}">
-            <div class="filter-info">
-                <strong class="filter-name">{{ filter.name }}</strong>
-                <code class="filter-pattern">{{ filter.pattern }}</code>
-                <span class="filter-target">Target: {{ filter.target }}</span>
-                <span class="filter-matches">{{ filter_counts.get(filter.id, 0) }} matches</span>
+            <div class="filter-display">
+                <div class="filter-info">
+                    <strong class="filter-name">{{ filter.name }}</strong>
+                    <code class="filter-pattern">{{ filter.pattern }}</code>
+                    <span class="filter-target">Target: {{ filter.target }}</span>
+                    <span class="filter-matches">{{ filter_counts.get(filter.id, 0) }} matches</span>
+                </div>
+                <div class="filter-actions">
+                    <button type="button" class="btn-small btn-edit">Edit</button>
+                    <form action="{{ url_for('main.toggle_filter', filter_id=filter.id) }}" method="post" class="inline-form">
+                        <button type="submit" class="btn-small">
+                            {{ "Disable" if filter.is_active else "Enable" }}
+                        </button>
+                    </form>
+                    <form action="{{ url_for('main.delete_filter', filter_id=filter.id) }}" method="post" class="inline-form delete-filter-form"
+                          data-filter-name="{{ filter.name }}">
+                        <button type="submit" class="btn-small btn-danger">Delete</button>
+                    </form>
+                </div>
             </div>
-            <div class="filter-actions">
-                <form action="{{ url_for('main.toggle_filter', filter_id=filter.id) }}" method="post" class="inline-form">
-                    <button type="submit" class="btn-small">
-                        {{ "Disable" if filter.is_active else "Enable" }}
-                    </button>
-                </form>
-                <form action="{{ url_for('main.delete_filter', filter_id=filter.id) }}" method="post" class="inline-form"
-                      onsubmit="return confirm('Delete this filter?')">
-                    <button type="submit" class="btn-small btn-danger">Delete</button>
-                </form>
-            </div>
+            <form action="{{ url_for('main.edit_filter', filter_id=filter.id) }}" method="post" class="filter-edit-form">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="name" value="{{ filter.name }}" required>
+                </div>
+                <div class="form-group">
+                    <label>Regex Pattern</label>
+                    <input type="text" name="pattern" value="{{ filter.pattern }}" required>
+                </div>
+                <div class="form-group">
+                    <label>Apply to</label>
+                    <select name="target">
+                        <option value="both" {% if filter.target == 'both' %}selected{% endif %}>Title & Summary</option>
+                        <option value="title" {% if filter.target == 'title' %}selected{% endif %}>Title only</option>
+                        <option value="summary" {% if filter.target == 'summary' %}selected{% endif %}>Summary only</option>
+                    </select>
+                </div>
+                <input type="hidden" name="is_active" value="{{ '1' if filter.is_active else '0' }}">
+                <div class="filter-edit-actions">
+                    <button type="submit" class="btn">Save</button>
+                    <button type="button" class="btn-small btn-cancel">Cancel</button>
+                </div>
+            </form>
         </div>
         {% endfor %}
     </div>
@@ -95,6 +121,15 @@
             </div>
             <button type="submit" class="btn">Add Filter</button>
         </form>
+    </div>
+    <div class="confirm-modal-overlay" id="deleteFilterModal">
+        <div class="confirm-modal">
+            <p class="confirm-modal-message">Delete filter '<span id="deleteFilterName"></span>'?</p>
+            <div class="confirm-modal-actions">
+                <button type="button" class="btn-small" id="deleteFilterCancel">Cancel</button>
+                <button type="button" class="btn-small btn-danger" id="deleteFilterConfirm">Delete</button>
+            </div>
+        </div>
     </div>
 </main>
 {% endblock %}

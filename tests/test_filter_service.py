@@ -173,7 +173,7 @@ class TestFilterMatching:
 
             assert matches["count"] == 0
 
-    def test_filter_skips_already_read_articles(self, app, sample_feed):
+    def test_filter_matches_already_read_articles(self, app, sample_feed):
         with app.app_context():
             db = get_db()
             db.execute("""
@@ -188,8 +188,12 @@ class TestFilterMatching:
                 "SELECT COUNT(*) as count FROM filter_matches WHERE filter_id = ?",
                 (f.id,)
             ).fetchone()
+            assert matches["count"] == 1
 
-            assert matches["count"] == 0
+            article = db.execute(
+                "SELECT is_read FROM articles WHERE guid = 'read-guid'"
+            ).fetchone()
+            assert article["is_read"] == 1
 
 
 class TestUpdateFilter:

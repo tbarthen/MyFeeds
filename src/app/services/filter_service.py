@@ -132,27 +132,28 @@ def apply_filter_to_existing_articles(filter_obj: Filter) -> int:
     db = get_db()
 
     rows = db.execute("""
-        SELECT a.id, a.title, a.summary
+        SELECT a.id, a.title, a.summary, a.is_read
         FROM articles a
-        WHERE a.is_read = 0 AND a.is_saved = 0
+        WHERE a.is_saved = 0
           AND a.id NOT IN (
               SELECT article_id FROM filter_matches WHERE filter_id = ?
           )
     """, (filter_obj.id,)).fetchall()
 
     match_count = 0
-    matched_ids = []
+    unread_matched_ids = []
     compiled = re.compile(filter_obj.pattern, re.IGNORECASE)
 
     for row in rows:
         if article_matches_filter(row["title"], row["summary"], compiled, filter_obj.target):
             record_filter_match(row["id"], filter_obj.id)
-            matched_ids.append(row["id"])
+            if not row["is_read"]:
+                unread_matched_ids.append(row["id"])
             match_count += 1
 
-    if matched_ids:
-        placeholders = ",".join("?" * len(matched_ids))
-        db.execute(f"UPDATE articles SET is_read = 1 WHERE id IN ({placeholders})", matched_ids)
+    if unread_matched_ids:
+        placeholders = ",".join("?" * len(unread_matched_ids))
+        db.execute(f"UPDATE articles SET is_read = 1 WHERE id IN ({placeholders})", unread_matched_ids)
         db.commit()
 
     return match_count

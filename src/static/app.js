@@ -204,6 +204,62 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
+    // Filter inline edit toggle
+    document.querySelectorAll(".btn-edit").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            var filterItem = btn.closest(".filter-item");
+            if (!filterItem) return;
+            filterItem.querySelector(".filter-display").style.display = "none";
+            filterItem.querySelector(".filter-edit-form").classList.add("active");
+        });
+    });
+
+    document.querySelectorAll(".btn-cancel").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            var filterItem = btn.closest(".filter-item");
+            if (!filterItem) return;
+            filterItem.querySelector(".filter-display").style.display = "";
+            filterItem.querySelector(".filter-edit-form").classList.remove("active");
+        });
+    });
+
+    // Custom confirm modal for filter deletion
+    var deleteModal = document.getElementById("deleteFilterModal");
+    var deleteNameEl = document.getElementById("deleteFilterName");
+    var deleteCancelBtn = document.getElementById("deleteFilterCancel");
+    var deleteConfirmBtn = document.getElementById("deleteFilterConfirm");
+    var pendingDeleteForm = null;
+
+    function openDeleteModal(name, form) {
+        pendingDeleteForm = form;
+        deleteNameEl.textContent = name;
+        deleteModal.classList.add("active");
+    }
+
+    function closeDeleteModal() {
+        deleteModal.classList.remove("active");
+        pendingDeleteForm = null;
+    }
+
+    if (deleteModal) {
+        document.querySelectorAll(".delete-filter-form").forEach(function(form) {
+            form.addEventListener("submit", function(e) {
+                e.preventDefault();
+                openDeleteModal(form.dataset.filterName, form);
+            });
+        });
+
+        deleteCancelBtn.addEventListener("click", closeDeleteModal);
+
+        deleteModal.addEventListener("click", function(e) {
+            if (e.target === deleteModal) closeDeleteModal();
+        });
+
+        deleteConfirmBtn.addEventListener("click", function() {
+            if (pendingDeleteForm) pendingDeleteForm.submit();
+        });
+    }
+
     // Article search functionality
     const searchInput = document.getElementById("article-search");
     const searchClear = document.querySelector(".search-clear");
@@ -223,24 +279,54 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
+    function escapeRegex(str) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function highlightText(el, regex) {
+        if (!el) return;
+        if (!el.dataset.originalText) {
+            el.dataset.originalText = el.innerHTML;
+        }
+        el.innerHTML = el.dataset.originalText.replace(regex, "<mark>$&</mark>");
+    }
+
+    function clearHighlight(el) {
+        if (!el) return;
+        if (el.dataset.originalText !== undefined) {
+            el.innerHTML = el.dataset.originalText;
+            delete el.dataset.originalText;
+        }
+    }
+
     function filterArticles(query) {
         const articles = document.querySelectorAll(".article-item");
         const filterGroups = document.querySelectorAll(".filter-group");
+        var regex = query ? new RegExp(escapeRegex(query), "gi") : null;
 
         // Filter individual articles
         articles.forEach(function(article) {
+            var titleEl = article.querySelector(".article-title");
+            var summaryEl = article.querySelector(".article-summary");
+
             if (!query) {
                 article.classList.remove("search-hidden");
+                clearHighlight(titleEl);
+                clearHighlight(summaryEl);
                 return;
             }
 
-            const title = (article.querySelector(".article-title")?.textContent || "").toLowerCase();
-            const summary = (article.querySelector(".article-summary")?.textContent || "").toLowerCase();
+            const title = (titleEl?.textContent || "").toLowerCase();
+            const summary = (summaryEl?.textContent || "").toLowerCase();
 
             if (title.includes(query) || summary.includes(query)) {
                 article.classList.remove("search-hidden");
+                highlightText(titleEl, regex);
+                highlightText(summaryEl, regex);
             } else {
                 article.classList.add("search-hidden");
+                clearHighlight(titleEl);
+                clearHighlight(summaryEl);
             }
         });
 

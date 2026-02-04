@@ -617,8 +617,7 @@ div.nav-row,
 
 .filter-item {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+    flex-direction: column;
     padding: 16px;
     background: var(--content-bg);
     border: 1px solid var(--border-color);
@@ -667,6 +666,86 @@ div.nav-row,
 
 .btn-danger:hover {
     background: #b91c1c;
+}
+
+/* Filter Edit Form */
+.filter-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+}
+
+.filter-edit-form {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.filter-edit-form.active {
+    display: flex;
+}
+
+.filter-edit-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Search Highlight */
+mark {
+    background: #b8860b;
+    color: var(--text-color);
+    padding: 1px 2px;
+    border-radius: 2px;
+}
+
+/* Confirm Modal */
+.confirm-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 200;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.confirm-modal-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+
+.confirm-modal {
+    background: var(--content-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 360px;
+    width: 90%;
+    transform: scale(0.95);
+    transition: transform 0.15s ease;
+}
+
+.confirm-modal-overlay.active .confirm-modal {
+    transform: scale(1);
+}
+
+.confirm-modal-message {
+    font-size: 14px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.confirm-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 /* Add Filter Section */
@@ -916,7 +995,6 @@ div.nav-row,
     }
 
     .filter-item {
-        flex-direction: column;
         gap: 12px;
     }
 
