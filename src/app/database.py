@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from contextlib import contextmanager
 from flask import Flask, g, current_app
@@ -35,6 +36,37 @@ def init_db(app: Flask) -> None:
         db = get_db()
         db.executescript(SCHEMA)
         db.commit()
+        _run_migrations(db)
+
+
+def _run_migrations(db: sqlite3.Connection) -> None:
+    cursor = db.execute("PRAGMA table_info(articles)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "image_url" not in columns:
+        db.execute("ALTER TABLE articles ADD COLUMN image_url TEXT")
+        db.commit()
+
+    _backfill_article_images(db)
+
+
+def _backfill_article_images(db: sqlite3.Connection) -> None:
+    """Extract images from content/summary for articles missing image_url."""
+    articles = db.execute("""
+        SELECT id, content, summary FROM articles
+        WHERE image_url IS NULL AND (content IS NOT NULL OR summary IS NOT NULL)
+    """).fetchall()
+
+    for article in articles:
+        html_content = article["content"] or article["summary"] or ""
+        if html_content:
+            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_content)
+            if img_match:
+                db.execute(
+                    "UPDATE articles SET image_url = ? WHERE id = ?",
+                    (img_match.group(1), article["id"])
+                )
+
+    db.commit()
 
 
 SCHEMA = """
@@ -57,6 +89,7 @@ CREATE TABLE IF NOT EXISTS articles (
     summary TEXT,
     content TEXT,
     url TEXT,
+    image_url TEXT,
     published_at DATETIME,
     is_read BOOLEAN DEFAULT 0,
     is_saved BOOLEAN DEFAULT 0,

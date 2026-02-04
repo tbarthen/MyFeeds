@@ -127,21 +127,27 @@
         {% endif %}
 
         {% for article in articles %}
-        <article class="article-item {% if article.is_read %}is-read{% endif %}" data-id="{{ article.id }}">
-            <div class="article-meta">
-                <span class="article-source">{{ article.feed_title }}</span>
-                {% if article.published_at %}
-                <span>•</span>
-                <time class="article-date">{{ article.published_at.strftime('%b %d, %Y') }}</time>
+        <article class="article-item {% if article.is_read %}is-read{% endif %} {% if article.is_saved %}is-saved{% endif %}" data-id="{{ article.id }}">
+            <div class="article-content">
+                <div class="article-text">
+                    <div class="article-meta">
+                        {% if article.published_at %}
+                        <time class="article-date">{{ article.published_at.strftime('%b %d, %Y') }}</time>
+                        {% endif %}
+                        <span class="article-source">{{ article.feed_title }}</span>
+                    </div>
+                    <h2 class="article-title">
+                        <a href="{{ article.url }}" target="_blank" rel="noopener"
+                           data-article-id="{{ article.id }}">{{ article.title }}</a>
+                    </h2>
+                    {% if article.summary %}
+                    <p class="article-summary">{{ article.summary|striptags|truncate(200) }}</p>
+                    {% endif %}
+                </div>
+                {% if article.image_url %}
+                <img class="article-thumbnail" src="{{ article.image_url }}" alt="" loading="lazy">
                 {% endif %}
             </div>
-            <h2 class="article-title">
-                <a href="{{ article.url }}" target="_blank" rel="noopener"
-                   data-article-id="{{ article.id }}">{{ article.title }}</a>
-            </h2>
-            {% if article.summary %}
-            <p class="article-summary">{{ article.summary|striptags|truncate(200) }}</p>
-            {% endif %}
             <div class="article-actions">
                 <form action="{{ url_for('main.toggle_save', article_id=article.id) }}" method="post" class="inline-form">
                     <button type="submit" class="btn-star {% if article.is_saved %}active{% endif %}"

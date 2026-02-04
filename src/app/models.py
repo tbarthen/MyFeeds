@@ -47,6 +47,7 @@ class Article:
     summary: str | None = None
     content: str | None = None
     url: str | None = None
+    image_url: str | None = None
     published_at: datetime | None = None
     is_read: bool = False
     is_saved: bool = False
@@ -63,6 +64,7 @@ class Article:
             summary=row["summary"],
             content=row["content"],
             url=row["url"],
+            image_url=row["image_url"] if "image_url" in row.keys() else None,
             published_at=parse_datetime(row["published_at"]),
             is_read=bool(row["is_read"]),
             is_saved=bool(row["is_saved"]),

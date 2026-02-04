@@ -1,4 +1,5 @@
 import html
+import re
 import sqlite3
 from datetime import datetime, timezone
 from typing import Tuple
@@ -141,6 +142,41 @@ def fetch_and_parse_feed(url: str) -> Tuple[feedparser.FeedParserDict | None, st
     return parsed, None
 
 
+def extract_image_url(entry) -> str | None:
+    """Extract the best image URL from an RSS entry."""
+    # Try media:thumbnail first (commonly used)
+    if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
+        return entry.media_thumbnail[0].get("url")
+
+    # Try media:content with image type
+    if hasattr(entry, "media_content") and entry.media_content:
+        for media in entry.media_content:
+            media_type = media.get("type", "")
+            if media_type.startswith("image/") or media.get("medium") == "image":
+                return media.get("url")
+
+    # Try enclosures
+    if hasattr(entry, "enclosures") and entry.enclosures:
+        for enclosure in entry.enclosures:
+            enc_type = enclosure.get("type", "")
+            if enc_type.startswith("image/"):
+                return enclosure.get("href") or enclosure.get("url")
+
+    # Try to find image in content/summary HTML
+    content_html = ""
+    if entry.get("content"):
+        content_html = entry.content[0].get("value", "")
+    if not content_html:
+        content_html = entry.get("summary", "")
+
+    if content_html:
+        img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', content_html)
+        if img_match:
+            return img_match.group(1)
+
+    return None
+
+
 def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -> int:
     from src.app.services import filter_service
 
@@ -158,6 +194,7 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -
         if entry.get("content"):
             content = entry.content[0].get("value", "")
         url = entry.get("link", "")
+        image_url = extract_image_url(entry)
 
         published_at = None
         if entry.get("published_parsed"):
@@ -167,9 +204,9 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -
 
         try:
             cursor = db.execute("""
-                INSERT INTO articles (feed_id, guid, title, summary, content, url, published_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (feed_id, guid, title, summary, content, url, published_at))
+                INSERT INTO articles (feed_id, guid, title, summary, content, url, image_url, published_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (feed_id, guid, title, summary, content, url, image_url, published_at))
             db.commit()
 
             filter_service.apply_filters_to_article(cursor.lastrowid, title, summary)
