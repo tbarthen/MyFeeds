@@ -58,7 +58,12 @@
                     <strong class="filter-name">{{ filter.name }}</strong>
                     <code class="filter-pattern">{{ filter.pattern }}</code>
                     <span class="filter-target">Target: {{ filter.target }}</span>
-                    <span class="filter-matches">{{ filter_counts.get(filter.id, 0) }} matches</span>
+                    {% set match_count = filter_counts.get(filter.id, 0) %}
+                    {% if match_count > 0 %}
+                    <a href="{{ url_for('main.filtered_view') }}#filter-{{ filter.id }}" class="filter-matches filter-matches-link">{{ match_count }} matches</a>
+                    {% else %}
+                    <span class="filter-matches">0 matches</span>
+                    {% endif %}
                 </div>
                 <div class="filter-actions">
                     <button type="button" class="btn-small btn-edit">Edit</button>

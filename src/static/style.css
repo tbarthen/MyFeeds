@@ -654,6 +654,15 @@ div.nav-row,
     color: var(--text-muted);
 }
 
+a.filter-matches-link {
+    text-decoration: none;
+}
+
+a.filter-matches-link:hover {
+    color: var(--accent-color);
+    text-decoration: underline;
+}
+
 .filter-actions {
     display: flex;
     gap: 8px;

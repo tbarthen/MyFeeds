@@ -10,7 +10,7 @@ bp = Blueprint("main", __name__)
 def index():
     feeds = feed_service.get_all_feeds()
     feed_id = request.args.get("feed_id", type=int)
-    unread_only = request.args.get("unread", "0") == "1"
+    unread_only = request.args.get("unread", "1") == "1"
 
     articles = article_service.get_articles(
         feed_id=feed_id,

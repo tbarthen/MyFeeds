@@ -101,7 +101,7 @@
             <button type="button" class="search-clear" title="Clear">&times;</button>
         </div>
         <div class="toolbar-group">
-            <a href="{{ url_for('main.index', feed_id=selected_feed_id) }}"
+            <a href="{{ url_for('main.index', feed_id=selected_feed_id, unread=0) }}"
                class="btn-toolbar {% if not unread_only %}active{% endif %}">All</a>
             <a href="{{ url_for('main.index', feed_id=selected_feed_id, unread=1) }}"
                class="btn-toolbar {% if unread_only %}active{% endif %}">Unread</a>

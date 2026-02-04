@@ -58,7 +58,7 @@
     {% endif %}
 
     {% for filter, articles in filtered_by_rule %}
-    <section class="filter-group">
+    <section class="filter-group" id="filter-{{ filter.id }}">
         <header class="filter-group-header">
             <h3>{{ filter.name }}</h3>
             <code class="filter-pattern">{{ filter.pattern }}</code>
