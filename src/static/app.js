@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", function() {
-    // Check if we're in unread-only view
+    // Check if we're in unread-only view (default when no param, or explicit unread=1)
     function isUnreadView() {
-        return window.location.search.includes("unread=1");
+        return !window.location.search.includes("unread=0");
     }
 
     // Update sidebar unread counts after marking read/unread
