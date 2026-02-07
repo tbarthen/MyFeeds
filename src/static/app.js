@@ -115,8 +115,11 @@ document.addEventListener("DOMContentLoaded", function() {
         setTimeout(function() {
             article.classList.remove("just-read");
             article.classList.add("is-read");
-            // Show undo toast (will finalize previous pending undo if any)
-            showUndoToast(articleId, feedId, article);
+            // Only show undo toast in unread view (article will disappear)
+            // In all view, user can just swipe to mark unread again
+            if (isUnreadView()) {
+                showUndoToast(articleId, feedId, article);
+            }
         }, 400);
     }
 
