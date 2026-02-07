@@ -30,24 +30,93 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
-    // Handle marking article as read with flash and optional collapse
+    // Undo toast state
+    var pendingUndo = null;
+    var undoToast = document.getElementById("undoToast");
+    var undoBtn = document.getElementById("undoBtn");
+    var undoDismiss = document.getElementById("undoDismiss");
+    var articleList = document.querySelector(".article-list");
+
+    function showUndoToast(articleId, feedId, articleEl) {
+        // If there's a pending undo, finalize it first
+        if (pendingUndo) {
+            finalizeMarkRead(pendingUndo.articleEl);
+        }
+        pendingUndo = { articleId: articleId, feedId: feedId, articleEl: articleEl };
+        if (undoToast) {
+            undoToast.classList.add("active");
+        }
+        if (articleList) {
+            articleList.classList.add("has-toast");
+        }
+    }
+
+    function hideUndoToast() {
+        pendingUndo = null;
+        if (undoToast) {
+            undoToast.classList.remove("active");
+        }
+        if (articleList) {
+            articleList.classList.remove("has-toast");
+        }
+    }
+
+    function finalizeMarkRead(articleEl) {
+        if (!articleEl) return;
+        if (isUnreadView()) {
+            // Collapse and remove in unread view
+            articleEl.style.maxHeight = articleEl.offsetHeight + "px";
+            articleEl.offsetHeight; // Force reflow
+            articleEl.classList.add("collapsing");
+            setTimeout(function() {
+                articleEl.remove();
+            }, 300);
+        }
+        // In all view, article is already dimmed with is-read class
+    }
+
+    // Undo button click
+    if (undoBtn) {
+        undoBtn.addEventListener("click", function() {
+            if (!pendingUndo) return;
+            var articleId = pendingUndo.articleId;
+            var feedId = pendingUndo.feedId;
+            var articleEl = pendingUndo.articleEl;
+
+            fetch("/articles/" + articleId + "/unread", {
+                method: "POST",
+                headers: { "X-Requested-With": "XMLHttpRequest" }
+            }).then(function() {
+                updateUnreadCount(feedId, 1);
+                if (articleEl) {
+                    articleEl.classList.remove("is-read");
+                }
+                hideUndoToast();
+            });
+        });
+    }
+
+    // Dismiss button click
+    if (undoDismiss) {
+        undoDismiss.addEventListener("click", function() {
+            if (pendingUndo) {
+                finalizeMarkRead(pendingUndo.articleEl);
+            }
+            hideUndoToast();
+        });
+    }
+
+    // Handle marking article as read with flash and undo toast
     function markAsReadWithAnimation(article) {
+        var articleId = article.dataset.id;
+        var feedId = article.dataset.feedId;
+
         article.classList.add("just-read");
         setTimeout(function() {
             article.classList.remove("just-read");
-            if (isUnreadView()) {
-                // In unread view: collapse and remove
-                article.style.maxHeight = article.offsetHeight + "px";
-                // Force reflow
-                article.offsetHeight;
-                article.classList.add("collapsing");
-                setTimeout(function() {
-                    article.remove();
-                }, 300);
-            } else {
-                // In all view: just dim it
-                article.classList.add("is-read");
-            }
+            article.classList.add("is-read");
+            // Show undo toast (will finalize previous pending undo if any)
+            showUndoToast(articleId, feedId, article);
         }, 400);
     }
 
@@ -111,20 +180,12 @@ document.addEventListener("DOMContentLoaded", function() {
                 headers: { "X-Requested-With": "XMLHttpRequest" }
             }).then(function() {
                 updateUnreadCount(article.dataset.feedId, -1);
-                if (isUnreadView()) {
-                    markAsReadWithAnimation(article);
-                } else {
-                    article.classList.add("just-read");
-                    setTimeout(function() {
-                        article.classList.remove("just-read");
-                        article.classList.add("is-read");
-                        // Update button to "Mark Unread"
-                        var btn = form.querySelector("button");
-                        if (btn) {
-                            btn.textContent = "Mark Unread";
-                            form.action = form.action.replace("/read", "/unread");
-                        }
-                    }, 400);
+                markAsReadWithAnimation(article);
+                // Update button to "Mark Unread"
+                var btn = form.querySelector("button");
+                if (btn) {
+                    btn.textContent = "Mark Unread";
+                    form.action = form.action.replace("/read", "/unread");
                 }
             });
         });
