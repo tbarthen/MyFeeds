@@ -37,10 +37,23 @@ document.addEventListener("DOMContentLoaded", function() {
     var undoDismiss = document.getElementById("undoDismiss");
     var articleList = document.querySelector(".article-list");
 
+    function collapseArticle(articleEl) {
+        if (!articleEl) return;
+        articleEl.style.maxHeight = articleEl.offsetHeight + "px";
+        articleEl.offsetHeight; // Force reflow
+        articleEl.classList.add("collapsing");
+    }
+
+    function expandArticle(articleEl) {
+        if (!articleEl) return;
+        articleEl.classList.remove("collapsing");
+        articleEl.style.maxHeight = "";
+    }
+
     function showUndoToast(articleId, feedId, articleEl) {
-        // If there's a pending undo, finalize it first
-        if (pendingUndo) {
-            finalizeMarkRead(pendingUndo.articleEl);
+        // If there's a pending undo, remove that article permanently
+        if (pendingUndo && pendingUndo.articleEl) {
+            pendingUndo.articleEl.remove();
         }
         pendingUndo = { articleId: articleId, feedId: feedId, articleEl: articleEl };
         if (undoToast) {
@@ -61,20 +74,6 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
-    function finalizeMarkRead(articleEl) {
-        if (!articleEl) return;
-        if (isUnreadView()) {
-            // Collapse and remove in unread view
-            articleEl.style.maxHeight = articleEl.offsetHeight + "px";
-            articleEl.offsetHeight; // Force reflow
-            articleEl.classList.add("collapsing");
-            setTimeout(function() {
-                articleEl.remove();
-            }, 300);
-        }
-        // In all view, article is already dimmed with is-read class
-    }
-
     // Undo button click
     if (undoBtn) {
         undoBtn.addEventListener("click", function() {
@@ -90,6 +89,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 updateUnreadCount(feedId, 1);
                 if (articleEl) {
                     articleEl.classList.remove("is-read");
+                    expandArticle(articleEl);
                 }
                 hideUndoToast();
             });
@@ -99,8 +99,8 @@ document.addEventListener("DOMContentLoaded", function() {
     // Dismiss button click
     if (undoDismiss) {
         undoDismiss.addEventListener("click", function() {
-            if (pendingUndo) {
-                finalizeMarkRead(pendingUndo.articleEl);
+            if (pendingUndo && pendingUndo.articleEl) {
+                pendingUndo.articleEl.remove();
             }
             hideUndoToast();
         });
@@ -118,6 +118,7 @@ document.addEventListener("DOMContentLoaded", function() {
             // Only show undo toast in unread view (article will disappear)
             // In all view, user can just swipe to mark unread again
             if (isUnreadView()) {
+                collapseArticle(article);
                 showUndoToast(articleId, feedId, article);
             }
         }, 400);
