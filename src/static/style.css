@@ -1101,6 +1101,12 @@ mark {
         transform: none;
     }
 
+    .undo-toast-close {
+        margin-left: auto;
+        padding-left: 12px;
+        border-left: 1px solid var(--border-color);
+    }
+
     .article-list.has-toast {
         padding-bottom: 72px;
     }
