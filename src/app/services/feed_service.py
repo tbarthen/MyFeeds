@@ -109,6 +109,9 @@ def refresh_feed(feed_id: int) -> Tuple[int, str | None]:
 def refresh_all_feeds() -> dict[int, Tuple[int, str | None]]:
     results = {}
     for feed in get_all_feeds():
+        if feed.fetch_error_count >= MAX_ERROR_COUNT:
+            results[feed.id] = (0, f"skipped: {feed.fetch_error_count} consecutive errors")
+            continue
         results[feed.id] = refresh_feed(feed.id)
     return results
 
