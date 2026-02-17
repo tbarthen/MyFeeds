@@ -46,9 +46,32 @@
         <h2>Filters</h2>
     </header>
 
+    <div class="add-filter-section">
+        <h3>Add New Filter</h3>
+        <form action="{{ url_for('main.add_filter') }}" method="post" class="add-filter-form">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" placeholder="e.g., Sports News" required>
+            </div>
+            <div class="form-group">
+                <label for="pattern">Regex Pattern</label>
+                <input type="text" id="pattern" name="pattern" placeholder="e.g., \b(football|soccer|nfl)\b" required>
+            </div>
+            <div class="form-group">
+                <label for="target">Apply to</label>
+                <select id="target" name="target">
+                    <option value="both">Title & Summary</option>
+                    <option value="title">Title only</option>
+                    <option value="summary">Summary only</option>
+                </select>
+            </div>
+            <button type="submit" class="btn">Add Filter</button>
+        </form>
+    </div>
+
     <div class="filter-list">
         {% if not filters %}
-        <p class="empty-state">No filters yet. Create one below.</p>
+        <p class="empty-state">No filters yet.</p>
         {% endif %}
 
         {% for filter in filters %}
@@ -105,28 +128,6 @@
         {% endfor %}
     </div>
 
-    <div class="add-filter-section">
-        <h3>Add New Filter</h3>
-        <form action="{{ url_for('main.add_filter') }}" method="post" class="add-filter-form">
-            <div class="form-group">
-                <label for="name">Name</label>
-                <input type="text" id="name" name="name" placeholder="e.g., Sports News" required>
-            </div>
-            <div class="form-group">
-                <label for="pattern">Regex Pattern</label>
-                <input type="text" id="pattern" name="pattern" placeholder="e.g., \b(football|soccer|nfl)\b" required>
-            </div>
-            <div class="form-group">
-                <label for="target">Apply to</label>
-                <select id="target" name="target">
-                    <option value="both">Title & Summary</option>
-                    <option value="title">Title only</option>
-                    <option value="summary">Summary only</option>
-                </select>
-            </div>
-            <button type="submit" class="btn">Add Filter</button>
-        </form>
-    </div>
     <div class="confirm-modal-overlay" id="deleteFilterModal">
         <div class="confirm-modal">
             <p class="confirm-modal-message">Delete filter '<span id="deleteFilterName"></span>'?</p>
