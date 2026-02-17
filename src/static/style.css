@@ -633,6 +633,7 @@ div.nav-row,
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
 }
 
 .filter-name {
@@ -646,6 +647,8 @@ div.nav-row,
     padding: 4px 8px;
     border-radius: 4px;
     font-family: monospace;
+    overflow-wrap: break-word;
+    word-break: break-all;
 }
 
 .filter-target,
