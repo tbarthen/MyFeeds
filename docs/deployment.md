@@ -10,7 +10,7 @@
 ## Deploy Changes
 
 ```bash
-gcloud compute ssh myfeeds --zone=us-central1-a --command="sudo bash -c 'cd /opt/MyFeeds && git pull && docker-compose down && docker-compose up -d --build'"
+gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 --command="sudo bash -c 'cd /opt/MyFeeds && git pull && docker-compose down && docker-compose up -d --build'"
 ```
 
 Note: Use `docker-compose` (hyphenated) not `docker compose` on this VM.
