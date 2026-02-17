@@ -49,3 +49,4 @@ Detailed documentation lives in `docs/`. Reference as needed:
 - `docs/architecture.md` — Component relationships
 - `docs/data_model.md` — Database schema and relationships
 - `docs/filter_engine.md` — Filtering logic and regex handling
+- `docs/deployment.md` — GCP deployment instructions
