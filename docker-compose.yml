@@ -5,6 +5,7 @@ services:
       - "80:5000"
     volumes:
       - myfeeds-data:/app/data
+      - ./src/static:/app/src/static
     environment:
       - FLASK_ENV=production
       - DATABASE_PATH=/app/data/myfeeds.db
