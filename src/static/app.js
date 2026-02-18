@@ -196,7 +196,7 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     // Swipe gestures for articles (mobile)
-    var SWIPE_THRESHOLD = 80;
+    var SWIPE_THRESHOLD = 50;
     var SWIPE_DEAD_ZONE = 30;
     document.querySelectorAll(".article-item").forEach(function(article) {
         var touchStartX = 0;
@@ -215,17 +215,24 @@ document.addEventListener("DOMContentLoaded", function() {
             touchCurrentX = e.touches[0].clientX;
             var diff = touchCurrentX - touchStartX;
             var absDiff = Math.abs(diff);
-            // Only show visual feedback after passing dead zone
             if (absDiff > SWIPE_DEAD_ZONE && absDiff < 150) {
                 var visualDiff = diff > 0 ? diff - SWIPE_DEAD_ZONE : diff + SWIPE_DEAD_ZONE;
                 article.style.transform = "translateX(" + visualDiff + "px)";
                 article.style.opacity = 1 - (absDiff - SWIPE_DEAD_ZONE) / 200;
+                if (diff < -SWIPE_THRESHOLD && !article.classList.contains("is-read")) {
+                    article.classList.add("swipe-ready");
+                } else {
+                    article.classList.remove("swipe-ready");
+                }
+            } else {
+                article.classList.remove("swipe-ready");
             }
         }, { passive: true });
 
         article.addEventListener("touchend", function() {
             if (!isSwiping) return;
             isSwiping = false;
+            article.classList.remove("swipe-ready");
             var diff = touchCurrentX - touchStartX;
             article.style.transition = "transform 0.2s, opacity 0.2s";
             article.style.transform = "";
