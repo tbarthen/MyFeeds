@@ -11,7 +11,7 @@
 
 **Full deploy** (Python/dependency/config changes):
 ```bash
-gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 --command="sudo bash -c 'cd /opt/MyFeeds && git pull && DOCKER_BUILDKIT=1 docker-compose up -d --build'"
+gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 --command="sudo bash -c 'cd /opt/MyFeeds && git pull && docker-compose up -d --build'"
 ```
 
 **Static-only deploy** (JS/CSS changes — no rebuild needed):
@@ -30,7 +30,7 @@ Note: Use `docker-compose` (hyphenated) not `docker compose` on this VM.
 
 ## Troubleshooting
 
-If docker-compose fails with `ContainerConfig` error, run with explicit down first:
+If docker-compose fails with `ContainerConfig` error (common when volumes or config changed), run with explicit down first:
 ```bash
-docker-compose down && DOCKER_BUILDKIT=1 docker-compose up -d --build
+docker-compose down && docker-compose up -d --build
 ```
