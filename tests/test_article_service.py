@@ -99,6 +99,25 @@ class TestMarkRead:
             count = article_service.mark_all_read(feed_id=sample_feed)
             assert count == 2
 
+    def test_mark_all_read_by_ids(self, app, sample_articles):
+        with app.app_context():
+            ids_to_mark = [sample_articles[0]]
+            count = article_service.mark_all_read(article_ids=ids_to_mark)
+            assert count == 1
+
+            marked = article_service.get_article_by_id(sample_articles[0])
+            assert marked.is_read is True
+
+            untouched = article_service.get_article_by_id(sample_articles[2])
+            assert untouched.is_read is False
+
+    def test_mark_all_read_by_ids_skips_already_read(self, app, sample_articles):
+        with app.app_context():
+            count = article_service.mark_all_read(
+                article_ids=[sample_articles[1]]
+            )
+            assert count == 0
+
 
 class TestToggleSaved:
     def test_toggle_saved_on(self, app, sample_articles):

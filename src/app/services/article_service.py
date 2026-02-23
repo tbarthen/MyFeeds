@@ -57,10 +57,19 @@ def mark_article_read(article_id: int, is_read: bool = True) -> bool:
     return cursor.rowcount > 0
 
 
-def mark_all_read(feed_id: int | None = None) -> int:
+def mark_all_read(
+    feed_id: int | None = None,
+    article_ids: list[int] | None = None
+) -> int:
     db = get_db()
 
-    if feed_id is not None:
+    if article_ids:
+        placeholders = ",".join("?" for _ in article_ids)
+        cursor = db.execute(
+            f"UPDATE articles SET is_read = 1 WHERE id IN ({placeholders}) AND is_read = 0",
+            article_ids
+        )
+    elif feed_id is not None:
         cursor = db.execute(
             "UPDATE articles SET is_read = 1 WHERE feed_id = ? AND is_read = 0",
             (feed_id,)

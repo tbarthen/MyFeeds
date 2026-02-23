@@ -90,6 +90,16 @@ def mark_unread(article_id: int):
 @bp.route("/articles/mark-all-read", methods=["POST"])
 def mark_all_read():
     feed_id = request.args.get("feed_id", type=int)
+
+    if request.is_json:
+        data = request.get_json()
+        article_ids = data.get("article_ids", [])
+        if not isinstance(article_ids, list):
+            return jsonify({"error": "article_ids must be a list"}), 400
+        article_ids = [int(aid) for aid in article_ids if str(aid).isdigit()]
+        count = article_service.mark_all_read(article_ids=article_ids)
+        return jsonify({"success": True, "count": count})
+
     article_service.mark_all_read(feed_id)
     return redirect(request.referrer or url_for("main.index"))
 

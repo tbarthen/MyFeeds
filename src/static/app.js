@@ -351,6 +351,42 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
+    // Intercept "Mark All Read" when search filter is active
+    var markAllForm = document.querySelector('form[action*="mark-all-read"]');
+    if (markAllForm && searchInput) {
+        markAllForm.addEventListener("submit", function(e) {
+            var query = searchInput.value.trim();
+            if (!query) return;
+
+            e.preventDefault();
+            var visibleUnread = document.querySelectorAll(
+                '.article-item:not(.search-hidden):not(.is-read)'
+            );
+            var ids = [];
+            visibleUnread.forEach(function(article) {
+                ids.push(parseInt(article.dataset.id));
+            });
+            if (ids.length === 0) return;
+
+            fetch(markAllForm.action, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                body: JSON.stringify({ article_ids: ids })
+            }).then(function() {
+                visibleUnread.forEach(function(article) {
+                    updateUnreadCount(article.dataset.feedId, -1);
+                    article.classList.add("is-read");
+                    if (isUnreadView()) {
+                        collapseArticle(article);
+                    }
+                });
+            });
+        });
+    }
+
     function escapeRegex(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
@@ -380,25 +416,30 @@ document.addEventListener("DOMContentLoaded", function() {
         articles.forEach(function(article) {
             var titleEl = article.querySelector(".article-title");
             var summaryEl = article.querySelector(".article-summary");
+            var dateEl = article.querySelector(".article-date");
 
             if (!query) {
                 article.classList.remove("search-hidden");
                 clearHighlight(titleEl);
                 clearHighlight(summaryEl);
+                clearHighlight(dateEl);
                 return;
             }
 
             const title = (titleEl?.textContent || "").toLowerCase();
             const summary = (summaryEl?.textContent || "").toLowerCase();
+            const date = (dateEl?.textContent || "").toLowerCase();
 
-            if (title.includes(query) || summary.includes(query)) {
+            if (title.includes(query) || summary.includes(query) || date.includes(query)) {
                 article.classList.remove("search-hidden");
                 highlightText(titleEl, regex);
                 highlightText(summaryEl, regex);
+                highlightText(dateEl, regex);
             } else {
                 article.classList.add("search-hidden");
                 clearHighlight(titleEl);
                 clearHighlight(summaryEl);
+                clearHighlight(dateEl);
             }
         });
 

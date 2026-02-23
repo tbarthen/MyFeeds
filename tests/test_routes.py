@@ -136,6 +136,16 @@ class TestArticleRoutes:
         response = client.post("/articles/mark-all-read", follow_redirects=True)
         assert response.status_code == 200
 
+    def test_mark_all_read_with_ids(self, client, article_id):
+        response = client.post(
+            "/articles/mark-all-read",
+            json={"article_ids": [article_id]},
+            headers={"X-Requested-With": "XMLHttpRequest"}
+        )
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        assert response.json["count"] == 1
+
 
 class TestApiRoutes:
     def test_api_feeds(self, client, mock_feed_fetch):
