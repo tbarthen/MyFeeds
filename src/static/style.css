@@ -33,8 +33,8 @@ body {
 
 .app {
     display: flex;
-    min-height: 100vh;
-    overflow-x: hidden;
+    height: 100vh;
+    overflow: hidden;
 }
 
 /* Sidebar */
@@ -381,6 +381,7 @@ div.nav-row,
     display: flex;
     flex-direction: column;
     min-width: 0;
+    overflow-y: auto;
 }
 
 .content-header {
