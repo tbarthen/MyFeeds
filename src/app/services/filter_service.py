@@ -159,6 +159,13 @@ def apply_filter_to_existing_articles(filter_obj: Filter) -> int:
     return match_count
 
 
+def reapply_all_filters() -> int:
+    total = 0
+    for f in get_active_filters():
+        total += apply_filter_to_existing_articles(f)
+    return total
+
+
 def clear_filter_matches(filter_id: int) -> None:
     db = get_db()
     db.execute("DELETE FROM filter_matches WHERE filter_id = ?", (filter_id,))

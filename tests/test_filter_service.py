@@ -296,6 +296,46 @@ class TestGetFilteredArticles:
             assert total == 3
 
 
+class TestReapplyFilters:
+    def test_reapply_catches_unmarked_articles(self, app, sample_articles):
+        with app.app_context():
+            f, _ = filter_service.create_filter("Python", r"python", "both")
+
+            db = get_db()
+            db.execute("UPDATE articles SET is_read = 0")
+            db.execute("DELETE FROM filter_matches")
+            db.commit()
+
+            count = filter_service.reapply_all_filters()
+            assert count == 2
+
+            matches = db.execute(
+                "SELECT COUNT(*) as count FROM filter_matches WHERE filter_id = ?",
+                (f.id,)
+            ).fetchone()
+            assert matches["count"] == 2
+
+    def test_reapply_skips_already_matched(self, app, sample_articles):
+        with app.app_context():
+            filter_service.create_filter("Python", r"python", "both")
+
+            count = filter_service.reapply_all_filters()
+            assert count == 0
+
+    def test_reapply_skips_inactive_filters(self, app, sample_articles):
+        with app.app_context():
+            f, _ = filter_service.create_filter("Python", r"python", "both")
+            filter_service.update_filter(f.id, is_active=False)
+
+            db = get_db()
+            db.execute("DELETE FROM filter_matches")
+            db.execute("UPDATE articles SET is_read = 0")
+            db.commit()
+
+            count = filter_service.reapply_all_filters()
+            assert count == 0
+
+
 class TestRegexValidation:
     def test_valid_regex(self, app):
         with app.app_context():

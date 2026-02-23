@@ -179,6 +179,16 @@ def edit_filter(filter_id: int):
     return redirect(url_for("main.filters_page"))
 
 
+@bp.route("/filters/reapply", methods=["POST"])
+def reapply_filters():
+    count = filter_service.reapply_all_filters()
+    if count > 0:
+        flash(f"Filters matched {count} article(s)", "success")
+    else:
+        flash("No new matches found", "info")
+    return redirect(url_for("main.filters_page"))
+
+
 @bp.route("/filters/<int:filter_id>/toggle", methods=["POST"])
 def toggle_filter(filter_id: int):
     f = filter_service.get_filter_by_id(filter_id)

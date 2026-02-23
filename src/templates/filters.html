@@ -44,6 +44,9 @@
     <header class="content-header">
         <button type="button" class="menu-toggle" aria-label="Menu">&#9776;</button>
         <h2>Filters</h2>
+        <form action="{{ url_for('main.reapply_filters') }}" method="post">
+            <button type="submit" class="btn-toolbar">Re-apply Filters</button>
+        </form>
     </header>
 
     <div class="add-filter-section">
