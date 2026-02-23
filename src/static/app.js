@@ -282,17 +282,16 @@ document.addEventListener("DOMContentLoaded", function() {
                     headers: { "X-Requested-With": "XMLHttpRequest" }
                 });
             } else if (diff > SWIPE_SAVE_THRESHOLD) {
-                // Swipe right = add to favorites
+                // Swipe right = add to favorites (optimistic UI)
+                article.classList.toggle("is-saved");
+                var starBtn = article.querySelector(".btn-star");
+                if (starBtn) {
+                    starBtn.classList.toggle("active");
+                    starBtn.textContent = starBtn.classList.contains("active") ? "★" : "☆";
+                }
                 fetch("/articles/" + articleId + "/toggle-save", {
                     method: "POST",
                     headers: { "X-Requested-With": "XMLHttpRequest" }
-                }).then(function() {
-                    article.classList.toggle("is-saved");
-                    var starBtn = article.querySelector(".btn-star");
-                    if (starBtn) {
-                        starBtn.classList.toggle("active");
-                        starBtn.textContent = starBtn.classList.contains("active") ? "★" : "☆";
-                    }
                 });
             }
         });
