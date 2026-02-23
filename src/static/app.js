@@ -200,26 +200,47 @@ document.addEventListener("DOMContentLoaded", function() {
     var SWIPE_DEAD_ZONE = 30;
     document.querySelectorAll(".article-item").forEach(function(article) {
         var touchStartX = 0;
+        var touchStartY = 0;
         var touchCurrentX = 0;
+        var touchCurrentY = 0;
         var isSwiping = false;
+        var isScrolling = false;
 
         article.addEventListener("touchstart", function(e) {
             touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
             touchCurrentX = touchStartX;
+            touchCurrentY = touchStartY;
             isSwiping = true;
+            isScrolling = false;
             article.style.transition = "none";
         }, { passive: true });
 
         article.addEventListener("touchmove", function(e) {
             if (!isSwiping) return;
             touchCurrentX = e.touches[0].clientX;
-            var diff = touchCurrentX - touchStartX;
-            var absDiff = Math.abs(diff);
-            if (absDiff > SWIPE_DEAD_ZONE && absDiff < 150) {
-                var visualDiff = diff > 0 ? diff - SWIPE_DEAD_ZONE : diff + SWIPE_DEAD_ZONE;
+            touchCurrentY = e.touches[0].clientY;
+            var diffX = touchCurrentX - touchStartX;
+            var diffY = touchCurrentY - touchStartY;
+            var absDiffX = Math.abs(diffX);
+            var absDiffY = Math.abs(diffY);
+
+            if (!isScrolling && absDiffY > absDiffX) {
+                isScrolling = true;
+            }
+
+            if (isScrolling) {
+                article.style.transform = "";
+                article.style.opacity = "";
+                article.classList.remove("swipe-ready");
+                return;
+            }
+
+            if (absDiffX > SWIPE_DEAD_ZONE && absDiffX < 150) {
+                var visualDiff = diffX > 0 ? diffX - SWIPE_DEAD_ZONE : diffX + SWIPE_DEAD_ZONE;
                 article.style.transform = "translateX(" + visualDiff + "px)";
-                article.style.opacity = 1 - (absDiff - SWIPE_DEAD_ZONE) / 200;
-                if (diff < -SWIPE_THRESHOLD && !article.classList.contains("is-read")) {
+                article.style.opacity = 1 - (absDiffX - SWIPE_DEAD_ZONE) / 200;
+                if (diffX < -SWIPE_THRESHOLD && !article.classList.contains("is-read")) {
                     article.classList.add("swipe-ready");
                 } else {
                     article.classList.remove("swipe-ready");
@@ -233,6 +254,12 @@ document.addEventListener("DOMContentLoaded", function() {
             if (!isSwiping) return;
             isSwiping = false;
             article.classList.remove("swipe-ready");
+            if (isScrolling) {
+                article.style.transition = "transform 0.2s, opacity 0.2s";
+                article.style.transform = "";
+                article.style.opacity = "";
+                return;
+            }
             var diff = touchCurrentX - touchStartX;
             article.style.transition = "transform 0.2s, opacity 0.2s";
             article.style.transform = "";
