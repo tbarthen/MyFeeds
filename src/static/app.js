@@ -157,14 +157,13 @@ document.addEventListener("DOMContentLoaded", function() {
             var articleEl = document.querySelector('.article-item[data-id="' + articleId + '"]');
             if (articleEl && articleEl.classList.contains("is-read")) return;
 
+            if (articleEl) {
+                updateUnreadCount(articleEl.dataset.feedId, -1);
+                markAsReadWithAnimation(articleEl);
+            }
             fetch("/articles/" + articleId + "/read", {
                 method: "POST",
                 headers: { "X-Requested-With": "XMLHttpRequest" }
-            }).then(function() {
-                if (articleEl) {
-                    updateUnreadCount(articleEl.dataset.feedId, -1);
-                    markAsReadWithAnimation(articleEl);
-                }
             });
         });
     });
@@ -179,19 +178,17 @@ document.addEventListener("DOMContentLoaded", function() {
             var article = form.closest(".article-item");
             if (!article) return;
 
+            updateUnreadCount(article.dataset.feedId, -1);
+            markAsReadWithAnimation(article);
             fetch(form.action, {
                 method: "POST",
                 headers: { "X-Requested-With": "XMLHttpRequest" }
-            }).then(function() {
-                updateUnreadCount(article.dataset.feedId, -1);
-                markAsReadWithAnimation(article);
-                // Update button to "Mark Unread"
-                var btn = form.querySelector("button");
-                if (btn) {
-                    btn.textContent = "Mark Unread";
-                    form.action = form.action.replace("/read", "/unread");
-                }
             });
+            var btn = form.querySelector("button");
+            if (btn) {
+                btn.textContent = "Mark Unread";
+                form.action = form.action.replace("/read", "/unread");
+            }
         });
     });
 
@@ -273,19 +270,16 @@ document.addEventListener("DOMContentLoaded", function() {
                 // Swipe left = toggle read/unread
                 var isRead = article.classList.contains("is-read");
                 var endpoint = isRead ? "/articles/" + articleId + "/unread" : "/articles/" + articleId + "/read";
+                if (!isRead) {
+                    updateUnreadCount(article.dataset.feedId, -1);
+                    markAsReadWithAnimation(article);
+                } else {
+                    updateUnreadCount(article.dataset.feedId, 1);
+                    article.classList.remove("is-read");
+                }
                 fetch(endpoint, {
                     method: "POST",
                     headers: { "X-Requested-With": "XMLHttpRequest" }
-                }).then(function() {
-                    if (!isRead) {
-                        // Marking as read - flash first, then collapse if in unread view
-                        updateUnreadCount(article.dataset.feedId, -1);
-                        markAsReadWithAnimation(article);
-                    } else {
-                        // Marking as unread - no flash
-                        updateUnreadCount(article.dataset.feedId, 1);
-                        article.classList.remove("is-read");
-                    }
                 });
             } else if (diff > SWIPE_SAVE_THRESHOLD) {
                 // Swipe right = add to favorites
