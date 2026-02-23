@@ -160,7 +160,16 @@ def apply_filter_to_existing_articles(filter_obj: Filter) -> int:
 
 
 def reapply_all_filters() -> int:
-    total = 0
+    db = get_db()
+
+    remarked = db.execute("""
+        UPDATE articles SET is_read = 1
+        WHERE is_read = 0 AND is_saved = 0
+          AND id IN (SELECT article_id FROM filter_matches)
+    """)
+    db.commit()
+    total = remarked.rowcount
+
     for f in get_active_filters():
         total += apply_filter_to_existing_articles(f)
     return total

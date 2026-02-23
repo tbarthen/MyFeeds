@@ -315,12 +315,28 @@ class TestReapplyFilters:
             ).fetchone()
             assert matches["count"] == 2
 
-    def test_reapply_skips_already_matched(self, app, sample_articles):
+    def test_reapply_skips_already_matched_and_read(self, app, sample_articles):
         with app.app_context():
             filter_service.create_filter("Python", r"python", "both")
 
             count = filter_service.reapply_all_filters()
             assert count == 0
+
+    def test_reapply_remarks_matched_but_unread(self, app, sample_articles):
+        with app.app_context():
+            filter_service.create_filter("Python", r"python", "both")
+
+            db = get_db()
+            db.execute("UPDATE articles SET is_read = 0")
+            db.commit()
+
+            count = filter_service.reapply_all_filters()
+            assert count == 2
+
+            unread = db.execute(
+                "SELECT COUNT(*) as count FROM articles WHERE is_read = 0 AND is_saved = 0"
+            ).fetchone()
+            assert unread["count"] == 2
 
     def test_reapply_skips_inactive_filters(self, app, sample_articles):
         with app.app_context():
