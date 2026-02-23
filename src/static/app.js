@@ -197,6 +197,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Swipe gestures for articles (mobile)
     var SWIPE_THRESHOLD = 50;
+    var SWIPE_SAVE_THRESHOLD = 100;
     var SWIPE_DEAD_ZONE = 30;
     document.querySelectorAll(".article-item").forEach(function(article) {
         var touchStartX = 0;
@@ -286,7 +287,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         article.classList.remove("is-read");
                     }
                 });
-            } else if (diff > SWIPE_THRESHOLD) {
+            } else if (diff > SWIPE_SAVE_THRESHOLD) {
                 // Swipe right = add to favorites
                 fetch("/articles/" + articleId + "/toggle-save", {
                     method: "POST",
