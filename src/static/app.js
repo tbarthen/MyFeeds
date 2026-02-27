@@ -203,6 +203,7 @@ document.addEventListener("DOMContentLoaded", function() {
         var touchCurrentY = 0;
         var isSwiping = false;
         var isScrolling = false;
+        var thresholdReached = false;
 
         article.addEventListener("touchstart", function(e) {
             touchStartX = e.touches[0].clientX;
@@ -211,7 +212,10 @@ document.addEventListener("DOMContentLoaded", function() {
             touchCurrentY = touchStartY;
             isSwiping = true;
             isScrolling = false;
+            thresholdReached = false;
             article.style.transition = "none";
+            article.style.background = "";
+            article.style.boxShadow = "";
         }, { passive: true });
 
         article.addEventListener("touchmove", function(e) {
@@ -230,7 +234,8 @@ document.addEventListener("DOMContentLoaded", function() {
             if (isScrolling) {
                 article.style.transform = "";
                 article.style.opacity = "";
-                article.classList.remove("swipe-ready");
+                article.style.background = "";
+                article.style.boxShadow = "";
                 return;
             }
 
@@ -238,30 +243,46 @@ document.addEventListener("DOMContentLoaded", function() {
                 var visualDiff = diffX > 0 ? diffX - SWIPE_DEAD_ZONE : diffX + SWIPE_DEAD_ZONE;
                 article.style.transform = "translateX(" + visualDiff + "px)";
                 article.style.opacity = 1 - (absDiffX - SWIPE_DEAD_ZONE) / 200;
-                if (diffX < -SWIPE_THRESHOLD && !article.classList.contains("is-read")) {
-                    article.classList.add("swipe-ready");
+
+                if (diffX < -SWIPE_DEAD_ZONE && !article.classList.contains("is-read")) {
+                    var swipeDistance = absDiffX - SWIPE_DEAD_ZONE;
+                    var progress = Math.min(swipeDistance / 100, 1);
+                    var eased = 1 - Math.pow(1 - progress, 2);
+                    article.style.background = "rgba(45, 90, 135, " + (eased * 0.6) + ")";
+                    article.style.boxShadow = "0 0 " + (4 + eased * 16) + "px rgba(45, 90, 135, " + (0.15 + eased * 0.45) + ")";
+
+                    if (absDiffX > SWIPE_THRESHOLD && !thresholdReached) {
+                        thresholdReached = true;
+                        if (navigator.vibrate) navigator.vibrate(10);
+                    }
                 } else {
-                    article.classList.remove("swipe-ready");
+                    article.style.background = "";
+                    article.style.boxShadow = "";
                 }
             } else {
-                article.classList.remove("swipe-ready");
+                article.style.background = "";
+                article.style.boxShadow = "";
             }
         }, { passive: true });
 
         article.addEventListener("touchend", function() {
             if (!isSwiping) return;
             isSwiping = false;
-            article.classList.remove("swipe-ready");
+            var swipeTransition = "transform 0.2s, opacity 0.2s, background 0.2s, box-shadow 0.2s";
             if (isScrolling) {
-                article.style.transition = "transform 0.2s, opacity 0.2s";
+                article.style.transition = swipeTransition;
                 article.style.transform = "";
                 article.style.opacity = "";
+                article.style.background = "";
+                article.style.boxShadow = "";
                 return;
             }
             var diff = touchCurrentX - touchStartX;
-            article.style.transition = "transform 0.2s, opacity 0.2s";
+            article.style.transition = swipeTransition;
             article.style.transform = "";
             article.style.opacity = "";
+            article.style.background = "";
+            article.style.boxShadow = "";
 
             var articleId = article.dataset.id;
             if (!articleId) return;
