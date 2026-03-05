@@ -1,9 +1,17 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, Response
 
+from src.app.database import get_db
 from src.app.services import feed_service, article_service, filter_service, settings_service, opml_service
 
 
 bp = Blueprint("main", __name__)
+
+
+@bp.route("/health")
+def health():
+    db = get_db()
+    db.execute("SELECT 1 FROM feeds LIMIT 1")
+    return "ok", 200
 
 
 @bp.route("/")

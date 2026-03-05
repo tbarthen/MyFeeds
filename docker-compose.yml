@@ -10,7 +10,7 @@ services:
       - FLASK_ENV=production
       - DATABASE_PATH=/app/data/myfeeds.db
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 60s
       timeout: 5s
       retries: 3
