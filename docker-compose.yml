@@ -16,6 +16,17 @@ services:
       retries: 3
       start_period: 10s
     restart: always
+    labels:
+      - "autoheal=true"
+
+  autoheal:
+    image: willfarrell/autoheal
+    restart: always
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   myfeeds-data:
