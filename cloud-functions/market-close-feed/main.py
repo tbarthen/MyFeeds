@@ -1,8 +1,11 @@
 import datetime
 import xml.etree.ElementTree as ET
+import zoneinfo
 from email.utils import formatdate
 from time import mktime
 from typing import Optional
+
+ET_TZ = zoneinfo.ZoneInfo("America/New_York")
 
 import feedparser
 import functions_framework
@@ -64,13 +67,16 @@ def fetch_ej_summary() -> Optional[str]:
     return None
 
 
-def format_index_line(name: str, data: dict) -> str:
+def format_index_html(name: str, data: dict) -> str:
     arrow = "\u25b2" if data["change"] >= 0 else "\u25bc"
     sign = "+" if data["change"] >= 0 else ""
+    color = "#22c55e" if data["change"] >= 0 else "#ef4444"
     return (
-        f"{name + ':':<11} {data['price']:>10,.2f}  "
-        f"{arrow} {sign}{data['change']:>7,.2f}  "
-        f"({sign}{data['pct']:.2f}%)"
+        f'<div class="idx-row">'
+        f'<strong class="idx-name">{name}</strong>'
+        f'<span class="idx-price">{data["price"]:,.2f}</span>'
+        f'<span class="idx-chg" style="color:{color}">{arrow} {sign}{data["change"]:,.2f} ({sign}{data["pct"]:.2f}%)</span>'
+        f'</div>'
     )
 
 
@@ -80,46 +86,33 @@ def format_mover_line(m: dict, is_gainer: bool) -> str:
     return f"{m['symbol']:<5} {name:<18} ${m['price']:>8,.2f} {sign}{m['pct']:.1f}%"
 
 
-def wrap_text(text: str, width: int = 72) -> str:
-    words = text.split()
-    lines = []
-    current_line = ""
-    for word in words:
-        if current_line and len(current_line) + 1 + len(word) > width:
-            lines.append(current_line)
-            current_line = word
-        else:
-            current_line = f"{current_line} {word}" if current_line else word
-    if current_line:
-        lines.append(current_line)
-    return "\n".join(lines)
-
-
 def build_description(date_str: str, indices: dict, gainers: list, losers: list, ej_summary: Optional[str]) -> str:
-    lines = [f"Market Close \u2014 {date_str}", ""]
+    parts = [f"<h2 style=\"margin:0 0 12px\">Market Close \u2014 {date_str}</h2>"]
 
     for name in INDEX_URLS:
-        lines.append(format_index_line(name, indices[name]))
-    lines.append("")
+        parts.append(format_index_html(name, indices[name]))
 
-    header_g = "\u2500\u2500 GAINERS "
-    header_l = "\u2500\u2500 LOSERS "
-    lines.append(f"{header_g:\u2500<38} {header_l:\u2500<38}")
+    parts.append('<div class="movers">')
 
-    max_rows = max(len(gainers), len(losers))
-    for i in range(max_rows):
-        g_line = format_mover_line(gainers[i], True) if i < len(gainers) else ""
-        l_line = format_mover_line(losers[i], False) if i < len(losers) else ""
-        lines.append(f"{g_line:<38} \u2502  {l_line}")
-    lines.append("")
+    parts.append('<div class="mover-col"><h3 style="margin:0 0 4px">\u25b2 Gainers</h3><pre style="margin:0;font-size:13px">')
+    for g in gainers:
+        parts.append(format_mover_line(g, True))
+    parts.append("</pre></div>")
+
+    parts.append('<div class="mover-col"><h3 style="margin:0 0 4px">\u25bc Losers</h3><pre style="margin:0;font-size:13px">')
+    for l in losers:
+        parts.append(format_mover_line(l, False))
+    parts.append("</pre></div>")
+
+    parts.append("</div>")
 
     if ej_summary:
-        lines.append(wrap_text(ej_summary))
+        parts.append(f'<div style="margin-top:16px;line-height:1.5">{ej_summary}</div>')
 
-    return "\n".join(lines)
+    return "\n".join(parts)
 
 
-def build_rss(date_str: str, description: str) -> str:
+def build_rss(date_str: str, market_date: datetime.date, description: str) -> str:
     rfc_date = formatdate(
         mktime(datetime.datetime.now(datetime.timezone.utc).timetuple()),
         usegmt=True,
@@ -134,28 +127,73 @@ def build_rss(date_str: str, description: str) -> str:
 
     item = ET.SubElement(channel, "item")
     ET.SubElement(item, "title").text = f"Market Close \u2014 {date_str}"
+    ET.SubElement(item, "link").text = f"https://storage.googleapis.com/{BUCKET}/market-close.html"
     ET.SubElement(item, "pubDate").text = rfc_date
     guid = ET.SubElement(item, "guid", isPermaLink="false")
-    guid.text = f"market-close-{datetime.date.today().isoformat()}"
+    guid.text = f"market-close-{market_date.isoformat()}"
 
     desc_el = ET.SubElement(item, "description")
-    desc_el.text = f"<pre>{description}</pre>"
+    desc_el.text = description
 
     xml_bytes = ET.tostring(rss, encoding="unicode", xml_declaration=False)
     return f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_bytes}'
 
 
+HTML_TEMPLATE = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+  <style>
+    body {{ font-family: -apple-system, system-ui, sans-serif; max-width: 720px;
+           margin: 40px auto; padding: 0 20px; color: #1a1a1a; background: #fafafa; }}
+    .card {{ background: #fff; border-radius: 12px; padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.1); }}
+    .meta {{ color: #666; font-size: 14px; margin-bottom: 16px; }}
+    .idx-row {{ display: flex; padding: 4px 0; white-space: nowrap; }}
+    .idx-name {{ width: 90px; flex-shrink: 0; }}
+    .idx-price {{ width: 90px; text-align: right; flex-shrink: 0; }}
+    .idx-chg {{ margin-left: 12px; flex-shrink: 0; }}
+    .movers {{ display: flex; gap: 24px; margin-top: 16px; }}
+    .mover-col {{ flex: 1; min-width: 0; }}
+    pre {{ overflow-x: auto; }}
+    @media (max-width: 600px) {{
+      .movers {{ flex-direction: column; gap: 16px; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="meta">{date}</div>
+    {content}
+  </div>
+</body>
+</html>
+"""
+
+
 def upload_to_gcs(xml_content: str) -> str:
     client = storage.Client(project=PROJECT)
     bucket = client.bucket(BUCKET)
+
     blob = bucket.blob(BLOB_NAME)
     blob.upload_from_string(xml_content, content_type="application/rss+xml")
     return f"https://storage.googleapis.com/{BUCKET}/{BLOB_NAME}"
 
 
+def upload_html(date_str: str, title: str, description: str) -> None:
+    client = storage.Client(project=PROJECT)
+    bucket = client.bucket(BUCKET)
+    html = HTML_TEMPLATE.format(title=title, date=date_str, content=description)
+    blob = bucket.blob("market-close.html")
+    blob.upload_from_string(html, content_type="text/html")
+
+
 @functions_framework.http
 def market_close_feed(request):
-    today = datetime.date.today()
+    today = datetime.datetime.now(ET_TZ).date()
     date_str = today.strftime("%B %d, %Y")
 
     indices = {}
@@ -166,8 +204,10 @@ def market_close_feed(request):
     losers = fetch_movers(LOSERS_URL, 10)
     ej_summary = fetch_ej_summary()
 
+    title = f"Market Close \u2014 {date_str}"
     description = build_description(date_str, indices, gainers, losers, ej_summary)
-    xml = build_rss(date_str, description)
+    xml = build_rss(date_str, today, description)
     public_url = upload_to_gcs(xml)
+    upload_html(date_str, title, description)
 
     return f"Published to {public_url}", 200
