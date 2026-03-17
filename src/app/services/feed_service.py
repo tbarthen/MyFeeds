@@ -1,8 +1,10 @@
 import html
 import re
 import sqlite3
+import time
 from datetime import datetime, timezone
 from typing import Tuple
+from urllib.parse import urlparse
 
 import feedparser
 import requests
@@ -14,6 +16,7 @@ from src.app.models import Feed, Article
 FETCH_TIMEOUT = 30
 MAX_ERROR_COUNT = 3
 USER_AGENT = "MyFeeds/1.0 (RSS Reader; +https://github.com/myfeeds)"
+ALLOWED_SCHEMES = {"http", "https"}
 
 
 def get_all_feeds() -> list[Feed]:
@@ -106,17 +109,31 @@ def refresh_feed(feed_id: int) -> Tuple[int, str | None]:
     return new_count, None
 
 
+REFRESH_DELAY_SECONDS = 0.5
+
+
 def refresh_all_feeds() -> dict[int, Tuple[int, str | None]]:
     results = {}
-    for feed in get_all_feeds():
+    feeds = get_all_feeds()
+    for i, feed in enumerate(feeds):
         if feed.fetch_error_count >= MAX_ERROR_COUNT:
             results[feed.id] = (0, f"skipped: {feed.fetch_error_count} consecutive errors")
             continue
         results[feed.id] = refresh_feed(feed.id)
+        if i < len(feeds) - 1:
+            time.sleep(REFRESH_DELAY_SECONDS)
     return results
 
 
+def _is_safe_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.scheme in ALLOWED_SCHEMES and bool(parsed.hostname)
+
+
 def fetch_and_parse_feed(url: str) -> Tuple[feedparser.FeedParserDict | None, str | None]:
+    if not _is_safe_url(url):
+        return None, "only http and https URLs are allowed"
+
     try:
         headers = {"User-Agent": USER_AGENT}
         response = requests.get(url, timeout=FETCH_TIMEOUT, headers=headers)
@@ -185,6 +202,7 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -
 
     db = get_db()
     new_count = 0
+    compiled_filters = filter_service.get_compiled_active_filters()
 
     for entry in parsed.entries:
         guid = entry.get("id") or entry.get("link") or entry.get("title", "")
@@ -212,7 +230,8 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -
             """, (feed_id, guid, title, summary, content, url, image_url, published_at))
             db.commit()
 
-            filter_service.apply_filters_to_article(cursor.lastrowid, title, summary)
+            filter_service.apply_filters_to_article(cursor.lastrowid, title, summary,
+                                                    compiled_filters=compiled_filters)
             new_count += 1
         except sqlite3.IntegrityError:
             pass

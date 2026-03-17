@@ -436,15 +436,28 @@ document.addEventListener("DOMContentLoaded", function() {
     function highlightText(el, regex) {
         if (!el) return;
         if (!el.dataset.originalText) {
-            el.dataset.originalText = el.innerHTML;
+            el.dataset.originalText = el.textContent;
         }
-        el.innerHTML = el.dataset.originalText.replace(regex, "<mark>$&</mark>");
+        el.innerHTML = "";
+        var text = el.dataset.originalText;
+        var match;
+        var lastIndex = 0;
+        regex.lastIndex = 0;
+        while ((match = regex.exec(text)) !== null) {
+            el.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+            var mark = document.createElement("mark");
+            mark.textContent = match[0];
+            el.appendChild(mark);
+            lastIndex = regex.lastIndex;
+            if (!regex.global) break;
+        }
+        el.appendChild(document.createTextNode(text.slice(lastIndex)));
     }
 
     function clearHighlight(el) {
         if (!el) return;
         if (el.dataset.originalText !== undefined) {
-            el.innerHTML = el.dataset.originalText;
+            el.textContent = el.dataset.originalText;
             delete el.dataset.originalText;
         }
     }

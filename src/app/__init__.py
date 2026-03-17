@@ -13,13 +13,25 @@ def create_app(config: dict | None = None) -> Flask:
     )
 
     app.config["DATABASE"] = os.environ.get("DATABASE_PATH", "myfeeds.db")
-    app.config["SECRET_KEY"] = "dev-secret-key-change-in-production"
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
     app.config["SCHEDULER_ENABLED"] = True
 
     if config:
         app.config.update(config)
 
     init_db(app)
+
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "img-src 'self' https: data:; "
+            "style-src 'self' 'unsafe-inline'"
+        )
+        return response
 
     from src.app import routes
     app.register_blueprint(routes.bp)

@@ -9,6 +9,7 @@ services:
     environment:
       - FLASK_ENV=production
       - DATABASE_PATH=/app/data/myfeeds.db
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 60s

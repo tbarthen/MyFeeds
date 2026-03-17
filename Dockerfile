@@ -12,8 +12,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create data directory for SQLite database
-RUN mkdir -p /app/data
+# Create non-root user and data directory
+RUN useradd -r -s /bin/false appuser && mkdir -p /app/data && chown -R appuser:appuser /app/data
+
+USER appuser
 
 EXPOSE 5000
 

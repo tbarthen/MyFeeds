@@ -1,6 +1,9 @@
 import re
+import sqlite3
 from src.app.database import get_db
 from src.app.models import Filter, Article
+
+FILTER_UPDATABLE_COLUMNS = {"name", "pattern", "target", "is_active"}
 
 
 def get_all_filters() -> list[Filter]:
@@ -71,30 +74,26 @@ def update_filter(
 
     db = get_db()
 
-    updates = []
-    params = []
-
+    field_values = {}
     if name is not None:
-        updates.append("name = ?")
-        params.append(name.strip())
-
+        field_values["name"] = name.strip()
     if pattern is not None:
-        updates.append("pattern = ?")
-        params.append(pattern.strip())
-
+        field_values["pattern"] = pattern.strip()
     if target is not None:
-        updates.append("target = ?")
-        params.append(target)
-
+        field_values["target"] = target
     if is_active is not None:
-        updates.append("is_active = ?")
-        params.append(1 if is_active else 0)
+        field_values["is_active"] = 1 if is_active else 0
 
-    if not updates:
+    if not field_values:
         return existing, None
 
-    params.append(filter_id)
-    db.execute(f"UPDATE filters SET {', '.join(updates)} WHERE id = ?", params)
+    for col in field_values:
+        if col not in FILTER_UPDATABLE_COLUMNS:
+            return None, f"Invalid field: {col}"
+
+    set_clause = ", ".join(f"{col} = ?" for col in field_values)
+    params = list(field_values.values()) + [filter_id]
+    db.execute(f"UPDATE filters SET {set_clause} WHERE id = ?", params)
     db.commit()
 
     updated = get_filter_by_id(filter_id)
@@ -152,8 +151,11 @@ def apply_filter_to_existing_articles(filter_obj: Filter) -> int:
             match_count += 1
 
     if unread_matched_ids:
-        placeholders = ",".join("?" * len(unread_matched_ids))
-        db.execute(f"UPDATE articles SET is_read = 1 WHERE id IN ({placeholders})", unread_matched_ids)
+        placeholders = ",".join("?" for _ in unread_matched_ids)
+        db.execute(
+            "UPDATE articles SET is_read = 1 WHERE id IN ({})".format(placeholders),
+            unread_matched_ids
+        )
         db.commit()
 
     return match_count
@@ -181,18 +183,37 @@ def clear_filter_matches(filter_id: int) -> None:
     db.commit()
 
 
-def apply_filters_to_article(article_id: int, title: str | None, summary: str | None) -> list[int]:
-    filters = get_active_filters()
+def get_compiled_active_filters() -> list[tuple[Filter, re.Pattern]]:
+    compiled = []
+    for f in get_active_filters():
+        try:
+            compiled.append((f, re.compile(f.pattern, re.IGNORECASE)))
+        except re.error:
+            continue
+    return compiled
+
+
+def apply_filters_to_article(article_id: int, title: str | None, summary: str | None,
+                              compiled_filters: list[tuple[Filter, re.Pattern]] | None = None) -> list[int]:
+    if compiled_filters is None:
+        compiled_filters = get_compiled_active_filters()
+
     matched_filter_ids = []
 
-    for f in filters:
-        compiled = re.compile(f.pattern, re.IGNORECASE)
+    for f, compiled in compiled_filters:
         if article_matches_filter(title, summary, compiled, f.target):
-            record_filter_match(article_id, f.id)
             matched_filter_ids.append(f.id)
 
     if matched_filter_ids:
         db = get_db()
+        for fid in matched_filter_ids:
+            try:
+                db.execute(
+                    "INSERT INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
+                    (article_id, fid)
+                )
+            except sqlite3.IntegrityError:
+                pass
         db.execute("UPDATE articles SET is_read = 1 WHERE id = ?", (article_id,))
         db.commit()
 

@@ -28,7 +28,7 @@ gcloud functions deploy "${FUNCTION}" \
   --allow-unauthenticated \
   --entry-point=market_close_feed \
   --source="$(dirname "$0")" \
-  --timeout=120 \
+  --timeout=540 \
   --memory=256MiB \
   --gen2
 
@@ -49,11 +49,11 @@ gcloud scheduler jobs delete "${SCHEDULER_JOB}" \
 gcloud scheduler jobs create http "${SCHEDULER_JOB}" \
   --project="${PROJECT}" \
   --location="${REGION}" \
-  --schedule="30 16 * * 1-5" \
+  --schedule="0 17 * * 1-5" \
   --time-zone="America/New_York" \
   --uri="${FUNCTION_URL}" \
   --http-method=GET \
-  --attempt-deadline=180s
+  --attempt-deadline=1800s
 
 echo "==> Done. Trigger manually with:"
 echo "    curl ${FUNCTION_URL}"

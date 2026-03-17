@@ -1,16 +1,18 @@
 import datetime
+import re
+import time
 import xml.etree.ElementTree as ET
 import zoneinfo
 from email.utils import formatdate
 from time import mktime
 from typing import Optional
 
-ET_TZ = zoneinfo.ZoneInfo("America/New_York")
-
-import feedparser
 import functions_framework
 import requests
+from bs4 import BeautifulSoup
 from google.cloud import storage
+
+ET_TZ = zoneinfo.ZoneInfo("America/New_York")
 
 PROJECT = "glossy-reserve-153120"
 BUCKET = "myfeeds-market-close"
@@ -27,7 +29,9 @@ INDEX_URLS = {
 GAINERS_URL = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=day_gainers"
 LOSERS_URL = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=day_losers"
 
-EJ_FEED_URL = "https://fetchrss.com/feed/1vxzOo2J91bu1vxz7I7xYGEE.rss"
+EJ_URL = "https://www.edwardjones.com/us-en/market-news-insights/stock-market-news/daily-market-recap"
+EJ_RETRY_DELAY = 600
+EJ_MAX_RETRIES = 2
 
 
 def fetch_index(url: str) -> dict:
@@ -56,14 +60,46 @@ def fetch_movers(url: str, count: int = 10) -> list[dict]:
     return results
 
 
-def fetch_ej_summary() -> Optional[str]:
-    try:
-        feed = feedparser.parse(EJ_FEED_URL)
-        if feed.entries:
-            desc = feed.entries[0].get("description", "") or feed.entries[0].get("summary", "")
-            return desc.strip() if desc else None
-    except Exception:
-        pass
+def _scrape_ej(today: datetime.date) -> Optional[str]:
+    resp = requests.get(EJ_URL, headers=YAHOO_HEADERS, timeout=20)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    container = soup.select_one("div.rich-text.relative")
+    if not container:
+        return None
+
+    date_el = container.find("p")
+    if not date_el or not date_el.find("strong"):
+        return None
+
+    date_text = date_el.find("strong").get_text()
+    date_match = re.search(r"(\d{1,2}/\d{1,2}/\d{4})", date_text)
+    if not date_match:
+        return None
+
+    parts = date_match.group(1).split("/")
+    ej_date = datetime.date(int(parts[2]), int(parts[0]), int(parts[1]))
+    if ej_date != today:
+        return None
+
+    summary_list = container.find("ul")
+    if not summary_list:
+        return None
+
+    items = []
+    for li in summary_list.find_all("li"):
+        items.append(str(li))
+    return "".join(items) if items else None
+
+
+def fetch_ej_summary(today: datetime.date) -> Optional[str]:
+    for attempt in range(1 + EJ_MAX_RETRIES):
+        result = _scrape_ej(today)
+        if result is not None:
+            return result
+        if attempt < EJ_MAX_RETRIES:
+            time.sleep(EJ_RETRY_DELAY)
     return None
 
 
@@ -202,7 +238,7 @@ def market_close_feed(request):
 
     gainers = fetch_movers(GAINERS_URL, 10)
     losers = fetch_movers(LOSERS_URL, 10)
-    ej_summary = fetch_ej_summary()
+    ej_summary = fetch_ej_summary(today)
 
     title = f"Market Close \u2014 {date_str}"
     description = build_description(date_str, indices, gainers, losers, ej_summary)
