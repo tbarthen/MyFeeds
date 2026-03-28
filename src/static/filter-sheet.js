@@ -213,6 +213,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function closeSheet() {
+        longPressGhost = false;
         overlay.style.opacity = "0";
         sheet.style.transform = "";
         setTimeout(function() {
@@ -304,7 +305,7 @@ document.addEventListener("DOMContentLoaded", function() {
             d.classList.toggle("active", i === n);
         });
 
-        sheetFooter.style.display = n === 0 ? "none" : "";
+        sheetFooter.style.display = n === 0 ? "none" : "flex";
         termBackBtn.style.display = n === 1 ? "" : "none";
         termNextBtn.style.display = n === 1 ? "" : "none";
         testBackBtn.style.display = n === 2 ? "" : "none";
