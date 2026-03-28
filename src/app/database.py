@@ -12,7 +12,6 @@ def get_db() -> sqlite3.Connection:
         )
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
-        g.db.execute("PRAGMA journal_mode = WAL")
     return g.db
 
 
@@ -27,7 +26,6 @@ def get_db_connection(db_path: str):
     conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
     try:
         yield conn
     finally:
@@ -39,6 +37,7 @@ def init_db(app: Flask) -> None:
 
     with app.app_context():
         db = get_db()
+        db.execute("PRAGMA journal_mode = WAL")
         db.executescript(SCHEMA)
         db.commit()
         _run_migrations(db)

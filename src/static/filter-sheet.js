@@ -508,6 +508,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function renderChips() {
+        if (termChips.querySelector(".chip-edit-input")) return;
         termChips.innerHTML = "";
         state.chips.forEach(function(chip, idx) {
             var el = document.createElement("span");
@@ -570,7 +571,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function finishChipEdit(chip, idx, newText) {
-        newText = newText.trim();
+        newText = newText.trim().toLowerCase();
         if (!newText) {
             state.chips.splice(idx, 1);
         } else {
@@ -772,8 +773,13 @@ document.addEventListener("DOMContentLoaded", function() {
         var dupes = [];
         state.chips.forEach(function(chip) {
             var term = chip.isRegex ? chip.text : escapeRegex(chip.text);
-            if (wholeWordToggle.checked && !chip.isRegex) {
-                term = "\\b" + term + "\\b";
+            if (!chip.isRegex) {
+                if (pluralToggle.checked && isSimpleSPlural(chip.text)) {
+                    term = term.slice(0, -1) + "s?";
+                }
+                if (wholeWordToggle.checked) {
+                    term = "\\b" + term + "\\b";
+                }
             }
             if (existingTerms.indexOf(term.toLowerCase()) !== -1) {
                 dupes.push(chip.text);
