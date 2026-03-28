@@ -11,6 +11,80 @@
         <div class="sidebar-overlay"></div>
         {% block content %}{% endblock %}
     </div>
+    <div class="filter-sheet-overlay" id="filterSheetOverlay">
+        <div class="filter-sheet" id="filterSheet">
+            <div class="filter-sheet-handle"></div>
+            <div class="filter-sheet-header">
+                <h3 class="filter-sheet-title">Add to Filter</h3>
+                <button type="button" class="filter-sheet-close" id="filterSheetClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="filter-sheet-dots">
+                <span class="dot active"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+            <div class="filter-sheet-body">
+                <div class="filter-sheet-step" id="stepPickFilter">
+                    <div class="filter-pick-list" id="filterPickList"></div>
+                    <div class="filter-pick-new" id="filterPickNew">
+                        <button type="button" class="filter-pick-new-btn" id="filterPickNewBtn">+ New Filter</button>
+                        <div class="filter-pick-new-form" id="filterPickNewForm" style="display:none">
+                            <input type="text" id="newFilterName" placeholder="Filter name..." class="filter-pick-new-input">
+                            <div class="form-group" style="margin-top:8px">
+                                <label>Apply to</label>
+                                <select id="newFilterTarget">
+                                    <option value="both">Title &amp; Summary</option>
+                                    <option value="title">Title only</option>
+                                    <option value="summary">Summary only</option>
+                                </select>
+                            </div>
+                            <button type="button" class="btn-small" id="filterPickNewConfirm">Create &amp; Continue</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-sheet-step" id="stepSelectTerm" style="display:none">
+                    <div class="term-source" id="termSource"></div>
+                    <div class="term-chips-area" id="termChipsArea">
+                        <div class="term-chips" id="termChips"></div>
+                        <input type="text" class="term-free-input" id="termFreeInput" placeholder="Type a term...">
+                    </div>
+                    <div class="term-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="wholeWordToggle"> Whole word (\b)
+                        </label>
+                        <button type="button" class="btn-small" id="advancedToggle">Advanced</button>
+                    </div>
+                    <div class="term-advanced" id="termAdvanced" style="display:none">
+                        <label>Raw regex</label>
+                        <input type="text" id="termRawRegex" class="term-raw-input">
+                    </div>
+                    <div class="term-step-actions">
+                        <button type="button" class="btn-small" id="termBackBtn">&larr; Back</button>
+                        <button type="button" class="btn" id="termNextBtn">Test &rarr;</button>
+                    </div>
+                </div>
+
+                <div class="filter-sheet-step" id="stepTestSave" style="display:none">
+                    <div class="test-preview">
+                        <span class="test-badge">PREVIEW</span>
+                        <div class="test-result" id="testResult"></div>
+                    </div>
+                    <div class="test-pattern-display">
+                        <label>Pattern</label>
+                        <code id="testPatternDisplay"></code>
+                    </div>
+                    <div class="test-error" id="testError" style="display:none"></div>
+                    <div class="term-step-actions">
+                        <button type="button" class="btn-small" id="testBackBtn">&larr; Back</button>
+                        <button type="button" class="btn" id="testSaveBtn">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='filter-sheet.js') }}"></script>
 </body>
 </html>

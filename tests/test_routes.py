@@ -167,3 +167,61 @@ class TestApiRoutes:
         data = response.json
         assert len(data) == 1
         assert data[0]["title"] == "Test Article"
+
+    def test_api_filters_list(self, client):
+        response = client.get("/api/filters")
+        assert response.status_code == 200
+        assert response.json == []
+
+    def test_api_create_filter(self, client):
+        response = client.post("/api/filters", json={
+            "name": "Gaming",
+            "pattern": "\\b(game|gaming)\\b",
+            "target": "both"
+        })
+        assert response.status_code == 201
+        data = response.json
+        assert data["name"] == "Gaming"
+        assert data["id"] is not None
+
+    def test_api_create_filter_invalid(self, client):
+        response = client.post("/api/filters", json={
+            "name": "",
+            "pattern": "test",
+            "target": "both"
+        })
+        assert response.status_code == 400
+        assert "error" in response.json
+
+    def test_api_create_filter_bad_regex(self, client):
+        response = client.post("/api/filters", json={
+            "name": "Bad",
+            "pattern": "[invalid",
+            "target": "both"
+        })
+        assert response.status_code == 400
+
+    def test_api_update_filter(self, client):
+        create = client.post("/api/filters", json={
+            "name": "Test",
+            "pattern": "foo",
+            "target": "both"
+        })
+        filter_id = create.json["id"]
+
+        response = client.put(f"/api/filters/{filter_id}", json={
+            "pattern": "foo|bar"
+        })
+        assert response.status_code == 200
+        assert response.json["pattern"] == "foo|bar"
+
+    def test_api_update_filter_not_found(self, client):
+        response = client.put("/api/filters/9999", json={
+            "pattern": "test"
+        })
+        assert response.status_code == 400
+
+    def test_api_update_filter_no_body(self, client):
+        response = client.put("/api/filters/1",
+                              content_type="application/json")
+        assert response.status_code == 400

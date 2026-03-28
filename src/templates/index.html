@@ -144,6 +144,7 @@
                 {% if article.image_url %}
                 <img class="article-thumbnail" src="{{ article.image_url }}" alt="" loading="lazy">
                 {% endif %}
+                <button type="button" class="btn-kebab" aria-label="Add to filter" title="Add to filter">&#x22EE;</button>
             </div>
             <div class="article-actions">
                 <form action="{{ url_for('main.toggle_save', article_id=article.id) }}" method="post" class="inline-form">

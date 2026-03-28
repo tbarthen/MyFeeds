@@ -240,6 +240,54 @@ def api_filters():
     } for f in filters])
 
 
+@bp.route("/api/filters", methods=["POST"])
+def api_create_filter():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    name = (data.get("name") or "").strip()
+    pattern = (data.get("pattern") or "").strip()
+    target = data.get("target", "both")
+
+    new_filter, error = filter_service.create_filter(name, pattern, target)
+    if error:
+        return jsonify({"error": error}), 400
+
+    return jsonify({
+        "id": new_filter.id,
+        "name": new_filter.name,
+        "pattern": new_filter.pattern,
+        "target": new_filter.target,
+        "is_active": new_filter.is_active
+    }), 201
+
+
+@bp.route("/api/filters/<int:filter_id>", methods=["PUT"])
+def api_update_filter(filter_id: int):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    updated, error = filter_service.update_filter(
+        filter_id,
+        name=data.get("name"),
+        pattern=data.get("pattern"),
+        target=data.get("target"),
+        is_active=data.get("is_active")
+    )
+    if error:
+        return jsonify({"error": error}), 400
+
+    return jsonify({
+        "id": updated.id,
+        "name": updated.name,
+        "pattern": updated.pattern,
+        "target": updated.target,
+        "is_active": updated.is_active
+    })
+
+
 @bp.route("/articles/<int:article_id>/save", methods=["POST"])
 def toggle_save(article_id: int):
     new_state = article_service.toggle_saved(article_id)
