@@ -240,6 +240,10 @@ def api_filters():
     } for f in filters])
 
 
+MAX_FILTER_NAME_LENGTH = 200
+MAX_FILTER_PATTERN_LENGTH = 5000
+
+
 @bp.route("/api/filters", methods=["POST"])
 def api_create_filter():
     data = request.get_json()
@@ -249,6 +253,11 @@ def api_create_filter():
     name = (data.get("name") or "").strip()
     pattern = (data.get("pattern") or "").strip()
     target = data.get("target", "both")
+
+    if len(name) > MAX_FILTER_NAME_LENGTH:
+        return jsonify({"error": "Name too long"}), 400
+    if len(pattern) > MAX_FILTER_PATTERN_LENGTH:
+        return jsonify({"error": "Pattern too long"}), 400
 
     new_filter, error = filter_service.create_filter(name, pattern, target)
     if error:
@@ -269,10 +278,17 @@ def api_update_filter(filter_id: int):
     if not data:
         return jsonify({"error": "Request body required"}), 400
 
+    name = data.get("name")
+    pattern = data.get("pattern")
+    if name is not None and len(name) > MAX_FILTER_NAME_LENGTH:
+        return jsonify({"error": "Name too long"}), 400
+    if pattern is not None and len(pattern) > MAX_FILTER_PATTERN_LENGTH:
+        return jsonify({"error": "Pattern too long"}), 400
+
     updated, error = filter_service.update_filter(
         filter_id,
-        name=data.get("name"),
-        pattern=data.get("pattern"),
+        name=name,
+        pattern=pattern,
         target=data.get("target"),
         is_active=data.get("is_active")
     )

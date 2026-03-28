@@ -252,10 +252,20 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function loadFilters() {
         fetch("/api/filters")
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error("Failed to load filters");
+                return r.json();
+            })
             .then(function(filters) {
                 state.filters = filters;
                 renderFilterList(filters);
+            })
+            .catch(function() {
+                filterPickList.innerHTML = "";
+                var msg = document.createElement("p");
+                msg.className = "empty-state";
+                msg.textContent = "Could not load filters.";
+                filterPickList.appendChild(msg);
             });
     }
 
@@ -264,8 +274,17 @@ document.addEventListener("DOMContentLoaded", function() {
         filters.forEach(function(f) {
             var row = document.createElement("div");
             row.className = "filter-pick-row";
-            row.innerHTML = '<span class="filter-pick-name">' + escapeHtml(f.name) + '</span>' +
-                '<span class="filter-pick-terms">' + countTerms(f.pattern) + ' terms</span>';
+
+            var nameSpan = document.createElement("span");
+            nameSpan.className = "filter-pick-name";
+            nameSpan.textContent = f.name;
+            row.appendChild(nameSpan);
+
+            var termsSpan = document.createElement("span");
+            termsSpan.className = "filter-pick-terms";
+            termsSpan.textContent = countTerms(f.pattern) + " terms";
+            row.appendChild(termsSpan);
+
             row.addEventListener("click", function() {
                 state.selectedFilter = f;
                 state.isNewFilter = false;
