@@ -109,7 +109,7 @@ def refresh_feed(feed_id: int) -> Tuple[int, str | None]:
     return new_count, None
 
 
-REFRESH_DELAY_SECONDS = 0.5
+REFRESH_DELAY_SECONDS = 2
 
 
 def refresh_all_feeds() -> dict[int, Tuple[int, str | None]]:

@@ -45,6 +45,13 @@
 
                 <div class="filter-sheet-step" id="stepSelectTerm" style="display:none">
                     <div class="term-source" id="termSource"></div>
+                    <div class="term-add-bar">
+                        <button type="button" class="btn term-add-btn" id="termAddBtn" disabled>Add</button>
+                    </div>
+                    <div class="term-plural-prompt" id="termPluralPrompt" style="display:none">
+                        <span class="term-plural-label">Add as:</span>
+                        <div class="term-plural-options" id="termPluralOptions"></div>
+                    </div>
                     <div class="term-chips-area" id="termChipsArea">
                         <div class="term-chips" id="termChips"></div>
                         <input type="text" class="term-free-input" id="termFreeInput" placeholder="Type a term...">
@@ -53,10 +60,6 @@
                         <label class="checkbox-label">
                             <input type="checkbox" id="wholeWordToggle"> Whole word (\b)
                         </label>
-                    </div>
-                    <div class="term-step-actions">
-                        <button type="button" class="btn-small" id="termBackBtn">&larr; Back</button>
-                        <button type="button" class="btn" id="termNextBtn">Test &rarr;</button>
                     </div>
                 </div>
 
@@ -70,15 +73,18 @@
                         <code id="testPatternDisplay"></code>
                     </div>
                     <div class="test-error" id="testError" style="display:none"></div>
-                    <div class="term-step-actions">
-                        <button type="button" class="btn-small" id="testBackBtn">&larr; Back</button>
-                        <button type="button" class="btn" id="testSaveBtn">Save</button>
-                    </div>
                 </div>
+            </div>
+            <div class="filter-sheet-footer" id="filterSheetFooter">
+                <button type="button" class="btn-small" id="termBackBtn">&larr; Back</button>
+                <button type="button" class="btn" id="termNextBtn">Test &rarr;</button>
+                <button type="button" class="btn-small" id="testBackBtn" style="display:none">&larr; Back</button>
+                <button type="button" class="btn" id="testSaveBtn" style="display:none">Save</button>
             </div>
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pluralize/8.0.0/pluralize.min.js" integrity="sha512-KHREJLRvGzMNR0gMdcxmCkPSQ6M/2bDmEKGRsOAEaYFxmg3d0bOBREI/x3ltiNdMvfw0VMAXMO+LFCYmxw2Ng==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
     <script src="{{ url_for('static', filename='filter-sheet.js') }}"></script>
 </body>
