@@ -15,8 +15,9 @@ COPY . .
 # Create non-root user and data directory
 RUN useradd -r -s /bin/false appuser && mkdir -p /app/data && chown -R appuser:appuser /app/data
 
-USER appuser
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "2", "--timeout", "60", "run:app"]
+ENTRYPOINT ["/app/entrypoint.sh"]

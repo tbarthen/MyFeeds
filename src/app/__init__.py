@@ -28,6 +28,7 @@ def create_app(config: dict | None = None) -> Flask:
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
+            "script-src 'self' https://cdnjs.cloudflare.com; "
             "img-src 'self' https: data:; "
             "style-src 'self' 'unsafe-inline'"
         )
