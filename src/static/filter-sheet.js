@@ -15,8 +15,6 @@ document.addEventListener("DOMContentLoaded", function() {
     var filterPickNewConfirm = document.getElementById("filterPickNewConfirm");
     var termSource = document.getElementById("termSource");
     var termAddBtn = document.getElementById("termAddBtn");
-    var termPluralPrompt = document.getElementById("termPluralPrompt");
-    var termPluralOptions = document.getElementById("termPluralOptions");
     var termChips = document.getElementById("termChips");
     var termFreeInput = document.getElementById("termFreeInput");
     var wholeWordToggle = document.getElementById("wholeWordToggle");
@@ -47,8 +45,6 @@ document.addEventListener("DOMContentLoaded", function() {
     var MOVE_TOLERANCE = 10;
     var longPressGhost = false;
 
-    var hasPluralizeLib = typeof pluralize === "function";
-
     function escapeRegex(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
@@ -66,60 +62,9 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
-    // ── Pluralization ──
-
-    function getPluralAlternative(phrase) {
-        var words = phrase.split(/\s+/);
-        var lastWord = words[words.length - 1];
-        if (lastWord.length < 3) return null;
-
-        if (hasPluralizeLib) {
-            try {
-                var isPlural = pluralize.isPlural(lastWord);
-                var isSingular = pluralize.isSingular(lastWord);
-                var otherForm;
-                if (isPlural && !isSingular) {
-                    otherForm = pluralize.singular(lastWord);
-                } else if (isSingular && !isPlural) {
-                    otherForm = pluralize.plural(lastWord);
-                } else {
-                    return null;
-                }
-                if (otherForm.toLowerCase() === lastWord.toLowerCase()) return null;
-                var prefix = words.length > 1 ? words.slice(0, -1).join(" ") + " " : "";
-                return {
-                    plain: phrase,
-                    withPlural: prefix + lastWord + "|" + prefix + otherForm
-                };
-            } catch(e) {
-                return null;
-            }
-        }
-        return getFallbackPlural(phrase, words, lastWord);
-    }
-
-    function getFallbackPlural(phrase, words, lastWord) {
-        var lower = lastWord.toLowerCase();
-        var otherForm = null;
-
-        if (lower.endsWith("ies") && lower.length > 4 && !/[aeiou]/.test(lower[lower.length - 4])) {
-            otherForm = lastWord.slice(0, -3) + "y";
-        } else if (lower.endsWith("es") && (lower.endsWith("ses") || lower.endsWith("xes") || lower.endsWith("zes") || lower.endsWith("ches") || lower.endsWith("shes"))) {
-            otherForm = lastWord.slice(0, -2);
-        } else if (lower.endsWith("s") && !lower.endsWith("ss") && !lower.endsWith("us")) {
-            otherForm = lastWord.slice(0, -1);
-        } else if (lower.endsWith("y") && lower.length > 2 && !/[aeiou]/.test(lower[lower.length - 2])) {
-            otherForm = lastWord.slice(0, -1) + "ies";
-        } else {
-            otherForm = lastWord + "s";
-        }
-
-        if (!otherForm || otherForm.toLowerCase() === lastWord.toLowerCase()) return null;
-        var prefix = words.length > 1 ? words.slice(0, -1).join(" ") + " " : "";
-        return {
-            plain: phrase,
-            withPlural: prefix + lastWord + "|" + prefix + otherForm
-        };
+    function isSimpleSPlural(text) {
+        var lastWord = text.split(/\s+/).pop();
+        return lastWord.length >= 3 && lastWord.endsWith("s") && !lastWord.endsWith("ss") && !lastWord.endsWith("us");
     }
 
     // ── Long Press ──
@@ -223,7 +168,6 @@ document.addEventListener("DOMContentLoaded", function() {
             filterPickNewForm.style.display = "none";
             filterPickNewBtn.style.display = "";
             wholeWordToggle.checked = false;
-            hidePluralPrompt();
         }, 200);
     }
 
@@ -394,7 +338,6 @@ document.addEventListener("DOMContentLoaded", function() {
         renderTermSource();
         renderChips();
         termFreeInput.value = "";
-        hidePluralPrompt();
         updateAddBtn();
     }
 
@@ -450,7 +393,6 @@ document.addEventListener("DOMContentLoaded", function() {
             selectWord(btn, group, idx);
         }
         updateAddBtn();
-        hidePluralPrompt();
     }
 
     function selectWord(btn, group, idx) {
@@ -533,53 +475,25 @@ document.addEventListener("DOMContentLoaded", function() {
         termAddBtn.disabled = state.selectedWords.length === 0;
     }
 
-    // ── Add Button + Plural Prompt ──
+    // ── Add Button ──
 
     termAddBtn.addEventListener("click", function() {
         var phrase = getSelectedPhrase();
         if (!phrase) return;
-
-        var alt = getPluralAlternative(phrase);
-        if (alt) {
-            showPluralPrompt(alt);
-        } else {
-            commitChip(phrase);
-        }
+        commitChip(phrase);
     });
-
-    function showPluralPrompt(alt) {
-        termPluralPrompt.style.display = "";
-        termPluralOptions.innerHTML = "";
-
-        var plainBtn = document.createElement("button");
-        plainBtn.type = "button";
-        plainBtn.className = "btn plural-option-btn";
-        plainBtn.textContent = alt.plain;
-        plainBtn.addEventListener("click", function() {
-            commitChip(alt.plain);
-        });
-        termPluralOptions.appendChild(plainBtn);
-
-        var pluralBtn = document.createElement("button");
-        pluralBtn.type = "button";
-        pluralBtn.className = "btn plural-option-btn";
-        pluralBtn.textContent = alt.withPlural;
-        pluralBtn.addEventListener("click", function() {
-            commitChip(alt.withPlural);
-        });
-        termPluralOptions.appendChild(pluralBtn);
-    }
-
-    function hidePluralPrompt() {
-        termPluralPrompt.style.display = "none";
-    }
 
     function commitChip(text) {
         text = text.toLowerCase();
-        state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
+        var sPlural = isSimpleSPlural(text);
+        state.chips.push({
+            text: text,
+            isRegex: hasRegexMeta(text),
+            pluralToggleable: sPlural && !hasRegexMeta(text),
+            pluralActive: false
+        });
         clearSelection();
         updateAddBtn();
-        hidePluralPrompt();
         renderChips();
     }
 
@@ -593,12 +507,26 @@ document.addEventListener("DOMContentLoaded", function() {
 
             var label = document.createElement("span");
             label.className = "chip-label";
-            label.textContent = chip.text;
+            label.textContent = chip.pluralActive ? chip.text + "?" : chip.text;
             label.addEventListener("click", function(e) {
                 e.stopPropagation();
                 startChipEdit(el, chip, idx);
             });
             el.appendChild(label);
+
+            if (chip.pluralToggleable) {
+                var toggle = document.createElement("button");
+                toggle.type = "button";
+                toggle.className = "chip-plural-toggle" + (chip.pluralActive ? " active" : "");
+                toggle.textContent = "S/P";
+                toggle.setAttribute("aria-label", "Toggle singular/plural");
+                toggle.addEventListener("click", function(e) {
+                    e.stopPropagation();
+                    chip.pluralActive = !chip.pluralActive;
+                    renderChips();
+                });
+                el.appendChild(toggle);
+            }
 
             var remove = document.createElement("button");
             remove.type = "button";
@@ -646,6 +574,8 @@ document.addEventListener("DOMContentLoaded", function() {
         } else {
             chip.text = newText;
             chip.isRegex = hasRegexMeta(newText);
+            chip.pluralToggleable = isSimpleSPlural(newText) && !chip.isRegex;
+            if (!chip.pluralToggleable) chip.pluralActive = false;
         }
         renderChips();
     }
@@ -676,6 +606,9 @@ document.addEventListener("DOMContentLoaded", function() {
                 });
             } else {
                 var t = escapeRegex(chip.text);
+                if (chip.pluralActive) {
+                    t = t.slice(0, -1) + "s?";
+                }
                 if (wholeWordToggle.checked) t = "\\b" + t + "\\b";
                 newTerms.push(t);
             }

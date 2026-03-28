@@ -1379,47 +1379,6 @@ mark {
     background: var(--border-color);
 }
 
-/* Plural prompt */
-.term-plural-prompt {
-    margin-bottom: 12px;
-    padding: 12px;
-    background: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-}
-
-.term-plural-label {
-    font-size: 12px;
-    color: var(--text-muted);
-    display: block;
-    margin-bottom: 8px;
-}
-
-.term-plural-options {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.plural-option-btn {
-    min-height: 48px;
-    padding: 8px 16px;
-    font-size: 14px;
-    text-align: left;
-    width: 100%;
-    border: 1px solid var(--border-color);
-    background: var(--content-bg);
-    color: var(--text-color);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-}
-
-.plural-option-btn:hover {
-    border-color: var(--accent-color);
-    background: rgba(77, 166, 255, 0.1);
-}
-
 .term-chips-area {
     border: 1px solid var(--border-color);
     border-radius: 6px;
@@ -1460,6 +1419,25 @@ mark {
     cursor: text;
     border-bottom: 1px dashed var(--text-muted);
     padding-bottom: 1px;
+}
+
+.chip-plural-toggle {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-color);
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.chip-plural-toggle.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #fff;
 }
 
 .term-chip .chip-remove {
@@ -1693,9 +1671,11 @@ mark {
         min-height: 48px;
     }
 
-    .plural-option-btn {
-        min-height: 48px;
-        font-size: 15px;
+    .chip-plural-toggle {
+        min-width: 48px;
+        min-height: 32px;
+        font-size: 12px;
+        padding: 4px 8px;
     }
 
     .term-chips-area {
