@@ -1421,25 +1421,6 @@ mark {
     padding-bottom: 1px;
 }
 
-.chip-plural-toggle {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 4px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-color);
-    color: var(--text-muted);
-    cursor: pointer;
-    line-height: 1;
-    white-space: nowrap;
-}
-
-.chip-plural-toggle.active {
-    background: var(--accent-color);
-    border-color: var(--accent-color);
-    color: #fff;
-}
-
 .term-chip .chip-remove {
     font-size: 16px;
     color: var(--text-muted);
@@ -1489,7 +1470,7 @@ mark {
 .term-options {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 24px;
     margin-bottom: 12px;
 }
 
@@ -1671,13 +1652,6 @@ mark {
         min-height: 48px;
     }
 
-    .chip-plural-toggle {
-        min-width: 48px;
-        min-height: 32px;
-        font-size: 12px;
-        padding: 4px 8px;
-    }
-
     .term-chips-area {
         gap: 8px;
         padding: 12px;
@@ -1713,7 +1687,7 @@ mark {
     }
 
     .term-options .checkbox-label {
-        min-height: 44px;
+        min-height: 48px;
         font-size: 14px;
     }
 

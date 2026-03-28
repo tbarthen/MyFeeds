@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", function() {
     var termChips = document.getElementById("termChips");
     var termFreeInput = document.getElementById("termFreeInput");
     var wholeWordToggle = document.getElementById("wholeWordToggle");
+    var pluralToggle = document.getElementById("pluralToggle");
     var termBackBtn = document.getElementById("termBackBtn");
     var termNextBtn = document.getElementById("termNextBtn");
     var testBackBtn = document.getElementById("testBackBtn");
@@ -168,6 +169,7 @@ document.addEventListener("DOMContentLoaded", function() {
             filterPickNewForm.style.display = "none";
             filterPickNewBtn.style.display = "";
             wholeWordToggle.checked = false;
+            pluralToggle.checked = false;
         }, 200);
     }
 
@@ -485,19 +487,20 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function commitChip(text) {
         text = text.toLowerCase();
-        var sPlural = isSimpleSPlural(text);
-        state.chips.push({
-            text: text,
-            isRegex: hasRegexMeta(text),
-            pluralToggleable: sPlural && !hasRegexMeta(text),
-            pluralActive: false
-        });
+        state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
         clearSelection();
         updateAddBtn();
         renderChips();
     }
 
     // ── Chips ──
+
+    function chipDisplayText(chip) {
+        if (pluralToggle.checked && !chip.isRegex && isSimpleSPlural(chip.text)) {
+            return chip.text + "?";
+        }
+        return chip.text;
+    }
 
     function renderChips() {
         termChips.innerHTML = "";
@@ -507,26 +510,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
             var label = document.createElement("span");
             label.className = "chip-label";
-            label.textContent = chip.pluralActive ? chip.text + "?" : chip.text;
+            label.textContent = chipDisplayText(chip);
             label.addEventListener("click", function(e) {
                 e.stopPropagation();
                 startChipEdit(el, chip, idx);
             });
             el.appendChild(label);
-
-            if (chip.pluralToggleable) {
-                var toggle = document.createElement("button");
-                toggle.type = "button";
-                toggle.className = "chip-plural-toggle" + (chip.pluralActive ? " active" : "");
-                toggle.textContent = "S/P";
-                toggle.setAttribute("aria-label", "Toggle singular/plural");
-                toggle.addEventListener("click", function(e) {
-                    e.stopPropagation();
-                    chip.pluralActive = !chip.pluralActive;
-                    renderChips();
-                });
-                el.appendChild(toggle);
-            }
 
             var remove = document.createElement("button");
             remove.type = "button";
@@ -543,6 +532,10 @@ document.addEventListener("DOMContentLoaded", function() {
             termChips.appendChild(el);
         });
     }
+
+    pluralToggle.addEventListener("change", function() {
+        renderChips();
+    });
 
     function startChipEdit(el, chip, idx) {
         var label = el.querySelector(".chip-label");
@@ -574,8 +567,6 @@ document.addEventListener("DOMContentLoaded", function() {
         } else {
             chip.text = newText;
             chip.isRegex = hasRegexMeta(newText);
-            chip.pluralToggleable = isSimpleSPlural(newText) && !chip.isRegex;
-            if (!chip.pluralToggleable) chip.pluralActive = false;
         }
         renderChips();
     }
@@ -606,7 +597,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 });
             } else {
                 var t = escapeRegex(chip.text);
-                if (chip.pluralActive) {
+                if (pluralToggle.checked && isSimpleSPlural(chip.text)) {
                     t = t.slice(0, -1) + "s?";
                 }
                 if (wholeWordToggle.checked) t = "\\b" + t + "\\b";
