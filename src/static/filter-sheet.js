@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", function() {
     var termNextBtn = document.getElementById("termNextBtn");
     var testBackBtn = document.getElementById("testBackBtn");
     var testSaveBtn = document.getElementById("testSaveBtn");
+    var testRetestBtn = document.getElementById("testRetestBtn");
     var testResult = document.getElementById("testResult");
     var testPatternDisplay = document.getElementById("testPatternDisplay");
     var testError = document.getElementById("testError");
@@ -309,6 +310,7 @@ document.addEventListener("DOMContentLoaded", function() {
         termBackBtn.style.display = n === 1 ? "" : "none";
         termNextBtn.style.display = n === 1 ? "" : "none";
         testBackBtn.style.display = n === 2 ? "" : "none";
+        testRetestBtn.style.display = n === 2 ? "" : "none";
         testSaveBtn.style.display = n === 2 ? "" : "none";
 
         if (n === 1) renderTermStep();
@@ -573,6 +575,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function commitChip(text) {
+        text = text.toLowerCase();
         state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
         clearSelection();
         updateAddBtn();
@@ -587,14 +590,21 @@ document.addEventListener("DOMContentLoaded", function() {
         state.chips.forEach(function(chip, idx) {
             var el = document.createElement("span");
             el.className = "term-chip" + (chip.isRegex ? " regex-chip" : "");
-            var textSpan = document.createElement("span");
-            textSpan.className = "chip-text";
-            textSpan.textContent = chip.text;
-            el.appendChild(textSpan);
 
-            var remove = document.createElement("span");
+            var label = document.createElement("span");
+            label.className = "chip-label";
+            label.textContent = chip.text;
+            label.addEventListener("click", function(e) {
+                e.stopPropagation();
+                startChipEdit(el, chip, idx);
+            });
+            el.appendChild(label);
+
+            var remove = document.createElement("button");
+            remove.type = "button";
             remove.className = "chip-remove";
             remove.textContent = "\u00D7";
+            remove.setAttribute("aria-label", "Remove");
             remove.addEventListener("click", function(e) {
                 e.stopPropagation();
                 state.chips.splice(idx, 1);
@@ -602,18 +612,17 @@ document.addEventListener("DOMContentLoaded", function() {
             });
             el.appendChild(remove);
 
-            el.addEventListener("click", function() {
-                startChipEdit(el, chip, idx);
-            });
             termChips.appendChild(el);
         });
     }
 
     function startChipEdit(el, chip, idx) {
-        el.innerHTML = "";
+        var label = el.querySelector(".chip-label");
+        if (!label) return;
         el.classList.add("term-chip-editing");
         var input = document.createElement("input");
         input.type = "text";
+        input.className = "chip-edit-input";
         input.value = chip.text;
         input.addEventListener("blur", function() {
             finishChipEdit(chip, idx, input.value);
@@ -625,7 +634,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 input.blur();
             }
         });
-        el.appendChild(input);
+        label.replaceWith(input);
         input.focus();
         input.select();
     }
@@ -643,7 +652,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     termFreeInput.addEventListener("keydown", function(e) {
         if (e.key === "Enter" && termFreeInput.value.trim()) {
-            var text = termFreeInput.value.trim();
+            var text = termFreeInput.value.trim().toLowerCase();
             state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
             termFreeInput.value = "";
             renderChips();
@@ -686,7 +695,7 @@ document.addEventListener("DOMContentLoaded", function() {
             return;
         }
         if (termFreeInput.value.trim()) {
-            var text = termFreeInput.value.trim();
+            var text = termFreeInput.value.trim().toLowerCase();
             state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
             termFreeInput.value = "";
             renderChips();
@@ -698,9 +707,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function preparePatternForJS(pattern) {
         var flags = "gi";
-        if (/^\(\?i\)/.test(pattern)) {
-            pattern = pattern.replace(/^\(\?i\)/, "");
-        }
+        pattern = pattern.replace(/\(\?i\)/g, "");
         return { pattern: pattern, flags: flags };
     }
 
@@ -762,11 +769,16 @@ document.addEventListener("DOMContentLoaded", function() {
         showStep(1);
     });
 
+    testRetestBtn.addEventListener("click", function() {
+        runTest();
+    });
+
     testSaveBtn.addEventListener("click", function() {
         var pattern = buildPattern();
 
+        var prepared = preparePatternForJS(pattern);
         try {
-            new RegExp(pattern);
+            new RegExp(prepared.pattern, prepared.flags);
         } catch(e) {
             testError.textContent = "Invalid regex: " + e.message;
             testError.style.display = "";

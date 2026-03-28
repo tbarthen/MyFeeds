@@ -1438,13 +1438,12 @@ mark {
 .term-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 12px;
     background: var(--active-bg);
     border: 1px solid var(--border-color);
     border-radius: 16px;
     padding: 6px 12px;
     font-size: 13px;
-    cursor: pointer;
     transition: border-color 0.15s;
     min-height: 36px;
 }
@@ -1457,6 +1456,12 @@ mark {
     border-color: #b8860b;
 }
 
+.term-chip .chip-label {
+    cursor: text;
+    border-bottom: 1px dashed var(--text-muted);
+    padding-bottom: 1px;
+}
+
 .term-chip .chip-remove {
     font-size: 16px;
     color: var(--text-muted);
@@ -1467,6 +1472,9 @@ mark {
     display: flex;
     align-items: center;
     justify-content: center;
+    background: none;
+    border: none;
+    padding: 0;
 }
 
 .term-chip .chip-remove:hover {
@@ -1478,12 +1486,12 @@ mark {
     border-color: var(--accent-color);
 }
 
-.term-chip-editing input {
+.term-chip-editing .chip-edit-input {
     background: transparent;
     border: none;
     outline: none;
     color: var(--text-color);
-    font-size: 14px;
+    font-size: 16px;
     width: 100px;
     min-height: 24px;
 }
@@ -1699,13 +1707,14 @@ mark {
         padding: 8px 16px;
         min-height: 44px;
         font-size: 14px;
-        gap: 8px;
+        gap: 14px;
     }
 
     .term-chip .chip-remove {
-        min-width: 28px;
-        min-height: 28px;
+        min-width: 48px;
+        min-height: 48px;
         font-size: 18px;
+        margin: -8px -12px -8px 0;
     }
 
     .term-free-input {
@@ -1713,7 +1722,7 @@ mark {
         font-size: 16px;
     }
 
-    .term-chip-editing input {
+    .term-chip-editing .chip-edit-input {
         font-size: 16px;
         min-height: 28px;
         width: 120px;
