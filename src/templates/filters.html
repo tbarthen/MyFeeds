@@ -78,7 +78,7 @@
         {% endif %}
 
         {% for filter in filters %}
-        <div class="filter-item {% if not filter.is_active %}inactive{% endif %}">
+        <div id="filter-{{ filter.id }}" class="filter-item {% if not filter.is_active %}inactive{% endif %}">
             <div class="filter-display">
                 <div class="filter-info">
                     <strong class="filter-name">{{ filter.name }}</strong>

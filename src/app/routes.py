@@ -184,7 +184,7 @@ def edit_filter(filter_id: int):
         target=target,
         is_active=is_active
     )
-    return redirect(url_for("main.filters_page"))
+    return redirect(url_for("main.filters_page", _anchor=f"filter-{filter_id}"))
 
 
 @bp.route("/filters/reapply", methods=["POST"])
@@ -202,7 +202,7 @@ def toggle_filter(filter_id: int):
     f = filter_service.get_filter_by_id(filter_id)
     if f:
         filter_service.update_filter(filter_id, is_active=not f.is_active)
-    return redirect(url_for("main.filters_page"))
+    return redirect(url_for("main.filters_page", _anchor=f"filter-{filter_id}"))
 
 
 @bp.route("/filters/<int:filter_id>/delete", methods=["POST"])
