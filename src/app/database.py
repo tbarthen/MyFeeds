@@ -6,9 +6,13 @@ from flask import Flask, g, current_app
 
 def get_db() -> sqlite3.Connection:
     if "db" not in g:
-        g.db = sqlite3.connect(current_app.config["DATABASE"])
+        g.db = sqlite3.connect(
+            current_app.config["DATABASE"],
+            timeout=10
+        )
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
+        g.db.execute("PRAGMA journal_mode = WAL")
     return g.db
 
 
@@ -20,9 +24,10 @@ def close_db(e=None) -> None:
 
 @contextmanager
 def get_db_connection(db_path: str):
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
     try:
         yield conn
     finally:
