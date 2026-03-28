@@ -496,10 +496,15 @@ document.addEventListener("DOMContentLoaded", function() {
     // ── Chips ──
 
     function chipDisplayText(chip) {
-        if (pluralToggle.checked && !chip.isRegex && isSimpleSPlural(chip.text)) {
-            return chip.text + "?";
+        if (chip.isRegex) return chip.text;
+        var display = chip.text;
+        if (pluralToggle.checked && isSimpleSPlural(display)) {
+            display = display + "?";
         }
-        return chip.text;
+        if (wholeWordToggle.checked) {
+            display = "\\b" + display + "\\b";
+        }
+        return display;
     }
 
     function renderChips() {
@@ -534,6 +539,10 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     pluralToggle.addEventListener("change", function() {
+        renderChips();
+    });
+
+    wholeWordToggle.addEventListener("change", function() {
         renderChips();
     });
 
