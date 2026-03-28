@@ -17,9 +17,6 @@ document.addEventListener("DOMContentLoaded", function() {
     var termChips = document.getElementById("termChips");
     var termFreeInput = document.getElementById("termFreeInput");
     var wholeWordToggle = document.getElementById("wholeWordToggle");
-    var advancedToggle = document.getElementById("advancedToggle");
-    var termAdvanced = document.getElementById("termAdvanced");
-    var termRawRegex = document.getElementById("termRawRegex");
     var termBackBtn = document.getElementById("termBackBtn");
     var termNextBtn = document.getElementById("termNextBtn");
     var testBackBtn = document.getElementById("testBackBtn");
@@ -50,6 +47,41 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function hasRegexMeta(str) {
         return /[.*+?^${}()|[\]\\]/.test(str);
+    }
+
+    function buildPluralPattern(word) {
+        var lower = word.toLowerCase();
+        if (lower.length < 3) return null;
+
+        if (lower.endsWith("ies") && lower.length > 4 && !/[aeiou]/.test(lower[lower.length - 4])) {
+            return word.slice(0, -3) + "(ies|y)";
+        }
+        if (lower.endsWith("ves")) {
+            return word.slice(0, -3) + "(ves|f|fe)";
+        }
+        if (lower.endsWith("ches") || lower.endsWith("shes")) {
+            return word.slice(0, -2) + "(es)?";
+        }
+        if (lower.endsWith("ses") || lower.endsWith("xes") || lower.endsWith("zes")) {
+            return word.slice(0, -2) + "(es)?";
+        }
+        if (lower.endsWith("s") && !lower.endsWith("ss") && !lower.endsWith("us")) {
+            return word.slice(0, -1) + "s?";
+        }
+        if (lower.endsWith("y") && lower.length > 2 && !/[aeiou]/.test(lower[lower.length - 2])) {
+            return word.slice(0, -1) + "(y|ies)";
+        }
+        if (lower.endsWith("fe")) {
+            return word.slice(0, -2) + "(fe|ves)";
+        }
+        if (lower.endsWith("f") && !lower.endsWith("ff")) {
+            return word.slice(0, -1) + "(f|ves)";
+        }
+        if (lower.endsWith("ch") || lower.endsWith("sh") || lower.endsWith("s") ||
+            lower.endsWith("x") || lower.endsWith("z")) {
+            return word + "(es)?";
+        }
+        return word + "s?";
     }
 
     function countTerms(pattern) {
@@ -159,7 +191,6 @@ document.addEventListener("DOMContentLoaded", function() {
             overlay.style.opacity = "";
             filterPickNewForm.style.display = "none";
             filterPickNewBtn.style.display = "";
-            termAdvanced.style.display = "none";
             wholeWordToggle.checked = false;
         }, 200);
     }
@@ -324,8 +355,6 @@ document.addEventListener("DOMContentLoaded", function() {
         renderTermSource();
         renderChips();
         termFreeInput.value = "";
-        termAdvanced.style.display = "none";
-        updateRawRegex();
     }
 
     function renderTermSource() {
@@ -392,10 +421,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
         if (!merged) {
             span.classList.add("selected");
-            state.chips.push({ text: word, isRegex: false });
+            var chip = { text: word, isRegex: false, plural: false };
+            state.chips.push(chip);
             renderChips();
         }
-        updateRawRegex();
     }
 
     function removeChipByText(text) {
@@ -403,13 +432,12 @@ document.addEventListener("DOMContentLoaded", function() {
             return c.text !== text;
         });
         renderChips();
-        updateRawRegex();
     }
 
     function renderChips() {
         termChips.innerHTML = "";
         state.chips.forEach(function(chip, idx) {
-            if (chip.text.includes("|") && !chip.isRegex) {
+            if (chip.text.includes("|") && !chip.isRegex && !chip.plural) {
                 var parts = chip.text.split("|").filter(function(p) { return p; });
                 parts.forEach(function(part) {
                     var sub = document.createElement("span");
@@ -419,11 +447,29 @@ document.addEventListener("DOMContentLoaded", function() {
                 });
             } else {
                 var el = document.createElement("span");
-                el.className = "term-chip" + (chip.isRegex ? " regex-chip" : "");
+                var displayText = chip.text;
+                if (chip.plural && !chip.isRegex) {
+                    var pluralResult = buildPluralPattern(chip.text);
+                    displayText = pluralResult || chip.text;
+                }
+                el.className = "term-chip" + (chip.isRegex ? " regex-chip" : "") + (chip.plural ? " plural-chip" : "");
                 var textSpan = document.createElement("span");
                 textSpan.className = "chip-text";
-                textSpan.textContent = chip.text;
+                textSpan.textContent = displayText;
                 el.appendChild(textSpan);
+
+                if (!chip.isRegex) {
+                    var pluralBtn = document.createElement("span");
+                    pluralBtn.className = "chip-plural" + (chip.plural ? " active" : "");
+                    pluralBtn.textContent = "S/P";
+                    pluralBtn.title = chip.plural ? "Disable singular/plural" : "Include singular/plural";
+                    pluralBtn.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        chip.plural = !chip.plural;
+                        renderChips();
+                    });
+                    el.appendChild(pluralBtn);
+                }
 
                 var remove = document.createElement("span");
                 remove.className = "chip-remove";
@@ -433,7 +479,6 @@ document.addEventListener("DOMContentLoaded", function() {
                     state.chips.splice(idx, 1);
                     clearWordSelections();
                     renderChips();
-                    updateRawRegex();
                 });
                 el.appendChild(remove);
 
@@ -476,7 +521,6 @@ document.addEventListener("DOMContentLoaded", function() {
         }
         clearWordSelections();
         renderChips();
-        updateRawRegex();
     }
 
     function clearWordSelections() {
@@ -491,7 +535,6 @@ document.addEventListener("DOMContentLoaded", function() {
             state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
             termFreeInput.value = "";
             renderChips();
-            updateRawRegex();
         }
     });
 
@@ -500,12 +543,15 @@ document.addEventListener("DOMContentLoaded", function() {
             ? state.selectedFilter.pattern.split("|").filter(function(t) { return t.trim(); })
             : [];
 
-        if (termAdvanced.style.display !== "none" && termRawRegex.value.trim()) {
-            return termRawRegex.value.trim();
-        }
-
         var newTerms = state.chips.map(function(chip) {
-            var term = chip.isRegex ? chip.text : escapeRegex(chip.text);
+            var term;
+            if (chip.isRegex) {
+                term = chip.text;
+            } else if (chip.plural) {
+                term = buildPluralPattern(chip.text) || escapeRegex(chip.text);
+            } else {
+                term = escapeRegex(chip.text);
+            }
             if (wholeWordToggle.checked && !chip.isRegex) {
                 term = "\\b" + term + "\\b";
             }
@@ -516,28 +562,12 @@ document.addEventListener("DOMContentLoaded", function() {
         return allTerms.join("|");
     }
 
-    function updateRawRegex() {
-        termRawRegex.value = buildPattern();
-    }
-
-    wholeWordToggle.addEventListener("change", updateRawRegex);
-
-    advancedToggle.addEventListener("click", function() {
-        var showing = termAdvanced.style.display !== "none";
-        termAdvanced.style.display = showing ? "none" : "";
-        if (!showing) {
-            updateRawRegex();
-            termRawRegex.focus();
-        }
-    });
-
     termBackBtn.addEventListener("click", function() {
         showStep(0);
     });
 
     termNextBtn.addEventListener("click", function() {
-        if (state.chips.length === 0 && termFreeInput.value.trim() === "" &&
-            (termAdvanced.style.display === "none" || !termRawRegex.value.trim())) {
+        if (state.chips.length === 0 && termFreeInput.value.trim() === "") {
             termFreeInput.focus();
             return;
         }
@@ -546,20 +576,29 @@ document.addEventListener("DOMContentLoaded", function() {
             state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
             termFreeInput.value = "";
             renderChips();
-            updateRawRegex();
         }
         showStep(2);
     });
 
     // ── Step 3: Test & Save ──
 
+    function preparePatternForJS(pattern) {
+        var flags = "gi";
+        if (/^\(\?i\)/.test(pattern)) {
+            pattern = pattern.replace(/^\(\?i\)/, "");
+            flags = "gi";
+        }
+        return { pattern: pattern, flags: flags };
+    }
+
     function runTest() {
         var pattern = buildPattern();
         testPatternDisplay.textContent = pattern;
         testError.style.display = "none";
 
+        var prepared = preparePatternForJS(pattern);
         try {
-            var regex = new RegExp(pattern, "gi");
+            var regex = new RegExp(prepared.pattern, prepared.flags);
         } catch(e) {
             testError.textContent = "Invalid regex: " + e.message;
             testError.style.display = "";

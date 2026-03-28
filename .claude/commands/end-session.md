@@ -36,9 +36,26 @@ git commit -m "descriptive message"
 
 Use imperative mood: "Add filter engine" not "Added filter engine"
 
+## 5. Deploy
+
+Push and deploy to the GCP VM:
+
+```bash
+git push
+gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 --command="sudo bash -c 'cd /opt/MyFeeds && git pull && docker-compose down && docker-compose up -d --build'"
+```
+
+If the change is **static files only** (JS/CSS), a lighter deploy is sufficient:
+
+```bash
+git push
+gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 --command="sudo bash -c 'cd /opt/MyFeeds && git pull'"
+```
+
 ## Report to User
 
 Summarize:
 1. Files changed
 2. Test results
 3. Commit hash
+4. Deploy status

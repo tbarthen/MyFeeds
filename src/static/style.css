@@ -1357,6 +1357,33 @@ mark {
     color: var(--danger-color);
 }
 
+.chip-plural {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 1px 4px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    line-height: 1;
+}
+
+.chip-plural:hover {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+.chip-plural.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: white;
+}
+
+.term-chip.plural-chip {
+    border-color: var(--accent-color);
+    background: rgba(77, 166, 255, 0.1);
+}
+
 .term-chip-editing {
     background: var(--bg-color);
     border-color: var(--accent-color);
@@ -1396,33 +1423,6 @@ mark {
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
-}
-
-.term-advanced {
-    margin-bottom: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.term-advanced label {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-.term-raw-input {
-    padding: 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 13px;
-    font-family: monospace;
-    background: var(--bg-color);
-    color: var(--text-color);
-}
-
-.term-raw-input:focus {
-    outline: none;
-    border-color: var(--accent-color);
 }
 
 .term-step-actions {
