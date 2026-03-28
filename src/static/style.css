@@ -624,6 +624,7 @@ div.nav-row,
     border: 1px solid var(--border-color);
     border-radius: 8px;
     margin-bottom: 12px;
+    scroll-margin-top: 56px;
 }
 
 .filter-item.inactive {
