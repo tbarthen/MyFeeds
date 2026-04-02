@@ -31,7 +31,9 @@ def make_mock_parsed_feed(title="Test Feed", link="https://example.com", entries
 @pytest.fixture
 def mock_requests_get():
     with patch("src.app.services.feed_service.requests.get") as mock:
-        mock.return_value = MagicMock(content=b"<xml></xml>")
+        mock_response = MagicMock(content=b"<xml></xml>", status_code=200)
+        mock_response.headers = {}
+        mock.return_value = mock_response
         yield mock
 
 

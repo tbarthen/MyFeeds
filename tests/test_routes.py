@@ -15,7 +15,9 @@ class MockFeedParserDict(dict):
 def mock_feed_fetch():
     with patch("src.app.services.feed_service.requests.get") as mock_req, \
          patch("src.app.services.feed_service.feedparser.parse") as mock_parse:
-        mock_req.return_value = MagicMock(content=b"<xml></xml>")
+        mock_response = MagicMock(content=b"<xml></xml>", status_code=200)
+        mock_response.headers = {}
+        mock_req.return_value = mock_response
 
         parsed = MockFeedParserDict()
         parsed["feed"] = {"title": "Test Feed", "link": "https://example.com"}

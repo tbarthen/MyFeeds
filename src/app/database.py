@@ -52,6 +52,13 @@ def _run_migrations(db: sqlite3.Connection) -> None:
 
     _backfill_article_images(db)
 
+    cursor = db.execute("PRAGMA table_info(feeds)")
+    feed_columns = [row[1] for row in cursor.fetchall()]
+    if "etag" not in feed_columns:
+        db.execute("ALTER TABLE feeds ADD COLUMN etag TEXT")
+        db.execute("ALTER TABLE feeds ADD COLUMN last_modified TEXT")
+        db.commit()
+
 
 def _backfill_article_images(db: sqlite3.Connection) -> None:
     """Extract images from content/summary for articles missing image_url."""

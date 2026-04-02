@@ -22,9 +22,12 @@ class Feed:
     last_error: str | None = None
     created_at: datetime | None = None
     unread_count: int = 0
+    etag: str | None = None
+    last_modified: str | None = None
 
     @classmethod
     def from_row(cls, row) -> "Feed":
+        keys = row.keys()
         return cls(
             id=row["id"],
             url=row["url"],
@@ -34,7 +37,9 @@ class Feed:
             fetch_error_count=row["fetch_error_count"],
             last_error=row["last_error"],
             created_at=parse_datetime(row["created_at"]),
-            unread_count=row["unread_count"] if "unread_count" in row.keys() else 0
+            unread_count=row["unread_count"] if "unread_count" in keys else 0,
+            etag=row["etag"] if "etag" in keys else None,
+            last_modified=row["last_modified"] if "last_modified" in keys else None,
         )
 
 

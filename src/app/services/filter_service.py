@@ -3,7 +3,19 @@ import sqlite3
 from src.app.database import get_db
 from src.app.models import Filter, Article
 
+SQLITE_VAR_LIMIT = 999
+
 FILTER_UPDATABLE_COLUMNS = {"name", "pattern", "target", "is_active"}
+
+
+def _chunked_update_is_read(db, article_ids: list[int]) -> None:
+    for i in range(0, len(article_ids), SQLITE_VAR_LIMIT):
+        chunk = article_ids[i:i + SQLITE_VAR_LIMIT]
+        placeholders = ",".join("?" for _ in chunk)
+        db.execute(
+            "UPDATE articles SET is_read = 1 WHERE id IN ({})".format(placeholders),
+            chunk
+        )
 
 
 def get_all_filters() -> list[Filter]:
@@ -139,26 +151,26 @@ def apply_filter_to_existing_articles(filter_obj: Filter) -> int:
           )
     """, (filter_obj.id,)).fetchall()
 
-    match_count = 0
+    match_ids = []
     unread_matched_ids = []
     compiled = re.compile(filter_obj.pattern, re.IGNORECASE)
 
     for row in rows:
         if article_matches_filter(row["title"], row["summary"], compiled, filter_obj.target):
-            record_filter_match(row["id"], filter_obj.id)
+            match_ids.append(row["id"])
             if not row["is_read"]:
                 unread_matched_ids.append(row["id"])
-            match_count += 1
 
-    if unread_matched_ids:
-        placeholders = ",".join("?" for _ in unread_matched_ids)
-        db.execute(
-            "UPDATE articles SET is_read = 1 WHERE id IN ({})".format(placeholders),
-            unread_matched_ids
+    if match_ids:
+        db.executemany(
+            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
+            [(aid, filter_obj.id) for aid in match_ids]
         )
+        if unread_matched_ids:
+            _chunked_update_is_read(db, unread_matched_ids)
         db.commit()
 
-    return match_count
+    return len(match_ids)
 
 
 def reapply_all_filters() -> int:
@@ -170,11 +182,47 @@ def reapply_all_filters() -> int:
           AND id IN (SELECT article_id FROM filter_matches)
     """)
     db.commit()
-    total = remarked.rowcount
+    remarked_count = remarked.rowcount
 
-    for f in get_active_filters():
-        total += apply_filter_to_existing_articles(f)
-    return total
+    compiled_filters = get_compiled_active_filters()
+    if not compiled_filters:
+        return remarked_count
+
+    existing_matches = set()
+    for row in db.execute("SELECT article_id, filter_id FROM filter_matches").fetchall():
+        existing_matches.add((row["article_id"], row["filter_id"]))
+
+    rows = db.execute("""
+        SELECT a.id, a.title, a.summary, a.is_read
+        FROM articles a
+        WHERE a.is_saved = 0
+    """).fetchall()
+
+    new_match_rows = []
+    unread_matched_ids = set()
+
+    for row in rows:
+        for f, compiled in compiled_filters:
+            if (row["id"], f.id) in existing_matches:
+                continue
+            if article_matches_filter(row["title"], row["summary"], compiled, f.target):
+                new_match_rows.append((row["id"], f.id))
+                if not row["is_read"]:
+                    unread_matched_ids.add(row["id"])
+
+    if new_match_rows:
+        db.executemany(
+            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
+            new_match_rows
+        )
+
+    if unread_matched_ids:
+        _chunked_update_is_read(db, list(unread_matched_ids))
+
+    if new_match_rows or unread_matched_ids:
+        db.commit()
+
+    return remarked_count + len(new_match_rows)
 
 
 def clear_filter_matches(filter_id: int) -> None:
@@ -193,6 +241,37 @@ def get_compiled_active_filters() -> list[tuple[Filter, re.Pattern]]:
     return compiled
 
 
+def apply_filters_to_articles(
+    articles: list[tuple[int, str | None, str | None]],
+    compiled_filters: list[tuple[Filter, re.Pattern]] | None = None
+) -> int:
+    if compiled_filters is None:
+        compiled_filters = get_compiled_active_filters()
+
+    if not compiled_filters or not articles:
+        return 0
+
+    db = get_db()
+    match_rows = []
+    matched_article_ids = set()
+
+    for article_id, title, summary in articles:
+        for f, compiled in compiled_filters:
+            if article_matches_filter(title, summary, compiled, f.target):
+                match_rows.append((article_id, f.id))
+                matched_article_ids.add(article_id)
+
+    if match_rows:
+        db.executemany(
+            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
+            match_rows
+        )
+        _chunked_update_is_read(db, list(matched_article_ids))
+        db.commit()
+
+    return len(matched_article_ids)
+
+
 def apply_filters_to_article(article_id: int, title: str | None, summary: str | None,
                               compiled_filters: list[tuple[Filter, re.Pattern]] | None = None) -> list[int]:
     if compiled_filters is None:
@@ -206,14 +285,10 @@ def apply_filters_to_article(article_id: int, title: str | None, summary: str | 
 
     if matched_filter_ids:
         db = get_db()
-        for fid in matched_filter_ids:
-            try:
-                db.execute(
-                    "INSERT INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
-                    (article_id, fid)
-                )
-            except sqlite3.IntegrityError:
-                pass
+        db.executemany(
+            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
+            [(article_id, fid) for fid in matched_filter_ids]
+        )
         db.execute("UPDATE articles SET is_read = 1 WHERE id = ?", (article_id,))
         db.commit()
 
@@ -236,17 +311,6 @@ def article_matches_filter(
     else:
         return bool(compiled_pattern.search(title) or compiled_pattern.search(summary))
 
-
-def record_filter_match(article_id: int, filter_id: int) -> None:
-    db = get_db()
-    try:
-        db.execute(
-            "INSERT INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
-            (article_id, filter_id)
-        )
-        db.commit()
-    except Exception:
-        pass
 
 
 def get_filtered_articles_by_rule() -> list[tuple[Filter, list[Article]]]:
