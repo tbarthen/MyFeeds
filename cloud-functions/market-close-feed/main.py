@@ -33,6 +33,29 @@ EJ_URL = "https://www.edwardjones.com/us-en/market-news-insights/stock-market-ne
 EJ_RETRY_DELAY = 120
 EJ_MAX_RETRIES = 2
 
+NYSE_HOLIDAYS = {
+    # 2026
+    datetime.date(2026, 1, 1): "New Year's Day",
+    datetime.date(2026, 1, 19): "Martin Luther King Jr. Day",
+    datetime.date(2026, 2, 16): "Presidents' Day",
+    datetime.date(2026, 4, 3): "Good Friday",
+    datetime.date(2026, 5, 25): "Memorial Day",
+    datetime.date(2026, 7, 3): "Independence Day (observed)",
+    datetime.date(2026, 9, 7): "Labor Day",
+    datetime.date(2026, 11, 26): "Thanksgiving Day",
+    datetime.date(2026, 12, 25): "Christmas Day",
+    # 2027
+    datetime.date(2027, 1, 1): "New Year's Day",
+    datetime.date(2027, 1, 18): "Martin Luther King Jr. Day",
+    datetime.date(2027, 2, 15): "Presidents' Day",
+    datetime.date(2027, 3, 26): "Good Friday",
+    datetime.date(2027, 5, 31): "Memorial Day",
+    datetime.date(2027, 7, 5): "Independence Day (observed)",
+    datetime.date(2027, 9, 6): "Labor Day",
+    datetime.date(2027, 11, 25): "Thanksgiving Day",
+    datetime.date(2027, 12, 24): "Christmas Day (observed)",
+}
+
 
 def fetch_index(url: str) -> dict:
     resp = requests.get(url, headers=YAHOO_HEADERS, timeout=15)
@@ -238,6 +261,15 @@ def _parse_date_param(request) -> datetime.date | None:
 def market_close_feed(request):
     today = _parse_date_param(request) or datetime.datetime.now(ET_TZ).date()
     date_str = today.strftime("%B %d, %Y")
+
+    holiday = NYSE_HOLIDAYS.get(today)
+    if holiday:
+        title = f"Markets Closed \u2014 {date_str}"
+        description = f'<h2 style="margin:0 0 12px">{title}</h2><p>US markets closed for {holiday}.</p>'
+        xml = build_rss(date_str, today, description)
+        public_url = upload_to_gcs(xml)
+        upload_html(date_str, title, description)
+        return f"Markets closed for {holiday}. Published to {public_url}", 200
 
     indices = {}
     for name, url in INDEX_URLS.items():
