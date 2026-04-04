@@ -30,7 +30,7 @@ GAINERS_URL = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/s
 LOSERS_URL = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=day_losers"
 
 EJ_URL = "https://www.edwardjones.com/us-en/market-news-insights/stock-market-news/daily-market-recap"
-EJ_RETRY_DELAY = 600
+EJ_RETRY_DELAY = 120
 EJ_MAX_RETRIES = 2
 
 
@@ -238,12 +238,18 @@ def market_close_feed(request):
 
     gainers = fetch_movers(GAINERS_URL, 10)
     losers = fetch_movers(LOSERS_URL, 10)
-    ej_summary = fetch_ej_summary(today)
 
     title = f"Market Close \u2014 {date_str}"
-    description = build_description(date_str, indices, gainers, losers, ej_summary)
+    description = build_description(date_str, indices, gainers, losers, None)
     xml = build_rss(date_str, today, description)
     public_url = upload_to_gcs(xml)
     upload_html(date_str, title, description)
+
+    ej_summary = fetch_ej_summary(today)
+    if ej_summary:
+        description = build_description(date_str, indices, gainers, losers, ej_summary)
+        xml = build_rss(date_str, today, description)
+        upload_to_gcs(xml)
+        upload_html(date_str, title, description)
 
     return f"Published to {public_url}", 200
