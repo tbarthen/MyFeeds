@@ -227,9 +227,16 @@ def upload_html(date_str: str, title: str, description: str) -> None:
     blob.upload_from_string(html, content_type="text/html")
 
 
+def _parse_date_param(request) -> datetime.date | None:
+    date_param = request.args.get("date")
+    if not date_param:
+        return None
+    return datetime.date.fromisoformat(date_param)
+
+
 @functions_framework.http
 def market_close_feed(request):
-    today = datetime.datetime.now(ET_TZ).date()
+    today = _parse_date_param(request) or datetime.datetime.now(ET_TZ).date()
     date_str = today.strftime("%B %d, %Y")
 
     indices = {}
