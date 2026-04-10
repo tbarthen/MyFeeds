@@ -1,11 +1,27 @@
 import atexit
+import logging
 import os
+import sys
 
 from flask import Flask
 from src.app.database import init_db
 
 
+def _configure_logging() -> None:
+    root = logging.getLogger()
+    if root.handlers:
+        return
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    ))
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+
 def create_app(config: dict | None = None) -> Flask:
+    _configure_logging()
+
     app = Flask(
         __name__,
         template_folder="../templates",
@@ -14,7 +30,7 @@ def create_app(config: dict | None = None) -> Flask:
 
     app.config["DATABASE"] = os.environ.get("DATABASE_PATH", "myfeeds.db")
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
-    app.config["SCHEDULER_ENABLED"] = True
+    app.config["SCHEDULER_ENABLED"] = os.environ.get("SCHEDULER_ENABLED", "true").lower() == "true"
 
     if config:
         app.config.update(config)

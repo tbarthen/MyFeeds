@@ -1,6 +1,7 @@
 services:
   myfeeds:
     build: .
+    command: web
     ports:
       - "80:5000"
     volumes:
@@ -10,12 +11,35 @@ services:
       - FLASK_ENV=production
       - DATABASE_PATH=/app/data/myfeeds.db
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - SCHEDULER_ENABLED=false
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    restart: always
+    labels:
+      - "autoheal=true"
+
+  scheduler:
+    build: .
+    command: scheduler
+    volumes:
+      - myfeeds-data:/app/data
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_PATH=/app/data/myfeeds.db
+      - SECRET_KEY=${SECRET_KEY:-not-needed-for-scheduler}
+      - SCHEDULER_ENABLED=true
+    healthcheck:
+      test: ["CMD", "find", "/tmp/scheduler_heartbeat", "-mmin", "-2"]
+      interval: 60s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
+    depends_on:
+      - myfeeds
     restart: always
     labels:
       - "autoheal=true"

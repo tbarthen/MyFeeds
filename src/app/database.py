@@ -25,6 +25,7 @@ def close_db(e=None) -> None:
 def get_db_connection(db_path: str):
     conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
@@ -43,21 +44,23 @@ def init_db(app: Flask) -> None:
         _run_migrations(db)
 
 
-def _run_migrations(db: sqlite3.Connection) -> None:
-    cursor = db.execute("PRAGMA table_info(articles)")
+def _add_column_if_missing(db: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+    cursor = db.execute(f"PRAGMA table_info({table})")
     columns = [row[1] for row in cursor.fetchall()]
-    if "image_url" not in columns:
-        db.execute("ALTER TABLE articles ADD COLUMN image_url TEXT")
+    if column in columns:
+        return
+    try:
+        db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
         db.commit()
+    except sqlite3.OperationalError:
+        pass
 
+
+def _run_migrations(db: sqlite3.Connection) -> None:
+    _add_column_if_missing(db, "articles", "image_url", "TEXT")
     _backfill_article_images(db)
-
-    cursor = db.execute("PRAGMA table_info(feeds)")
-    feed_columns = [row[1] for row in cursor.fetchall()]
-    if "etag" not in feed_columns:
-        db.execute("ALTER TABLE feeds ADD COLUMN etag TEXT")
-        db.execute("ALTER TABLE feeds ADD COLUMN last_modified TEXT")
-        db.commit()
+    _add_column_if_missing(db, "feeds", "etag", "TEXT")
+    _add_column_if_missing(db, "feeds", "last_modified", "TEXT")
 
 
 def _backfill_article_images(db: sqlite3.Connection) -> None:
