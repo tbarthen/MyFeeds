@@ -1,3 +1,9 @@
+window.addEventListener("pageshow", function(event) {
+    if (event.persisted) {
+        location.reload();
+    }
+});
+
 document.addEventListener("DOMContentLoaded", function() {
     // Check if we're in unread-only view (default when no param, or explicit unread=1)
     function isUnreadView() {
