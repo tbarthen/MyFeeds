@@ -22,6 +22,9 @@ services:
     labels:
       - "autoheal=true"
 
+  # Scheduler runs in its own container so APScheduler's CPU-bound feed
+  # refresh can't block /health responses in the web worker. Previously
+  # they shared a process and autoheal killed the container mid-refresh.
   scheduler:
     build: .
     command: scheduler
