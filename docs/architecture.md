@@ -21,6 +21,12 @@ Splitting the scheduler out means:
 
 **Do not fold these back together.** If you're tempted to simplify by merging them, re-read this section first.
 
+## On-demand refresh on page open
+
+The scheduled interval alone would mean a user reopening the app has to wait up to the full interval (default 30 min) to see new articles. To bridge that, the frontend fires `POST /api/refresh-if-stale` on page load; the web route writes `refresh_requested=1` to the `settings` table and returns immediately. The scheduler container polls that flag every 30 s (`check_on_demand_refresh_job`). When set, and if the last on-demand refresh was more than 5 min ago, it clears the flag and runs the same `refresh_all_feeds` path the interval job uses.
+
+Refresh work stays in the scheduler container so the web container keeps answering `/health` — the reason for the container split still holds.
+
 ## Logging
 
 `src/app/__init__.py::_configure_logging` attaches a stdout StreamHandler to the root logger at INFO level. This ensures `logger.info(...)` calls from anywhere in the app (notably `src.app.scheduler`) reach `docker logs`. Gunicorn's own access/error logs are separate.

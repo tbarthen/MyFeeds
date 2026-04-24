@@ -77,6 +77,12 @@ def refresh_all_feeds():
     return redirect(url_for("main.index"))
 
 
+@bp.route("/api/refresh-if-stale", methods=["POST"])
+def api_refresh_if_stale():
+    settings_service.set_setting("refresh_requested", "1")
+    return jsonify({"requested": True})
+
+
 @bp.route("/articles/<int:article_id>/read", methods=["POST"])
 def mark_read(article_id: int):
     article_service.mark_article_read(article_id, is_read=True)

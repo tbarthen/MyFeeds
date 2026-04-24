@@ -107,6 +107,15 @@ class TestFeedRoutes:
         response = client.post("/feeds/refresh-all", follow_redirects=True)
         assert response.status_code == 200
 
+    def test_refresh_if_stale_sets_flag(self, client, app):
+        response = client.post("/api/refresh-if-stale")
+        assert response.status_code == 200
+        assert response.json["requested"] is True
+
+        with app.app_context():
+            from src.app.services import settings_service
+            assert settings_service.get_setting("refresh_requested") == "1"
+
 
 class TestArticleRoutes:
     @pytest.fixture
