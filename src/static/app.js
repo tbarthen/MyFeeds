@@ -4,6 +4,20 @@ window.addEventListener("pageshow", function(event) {
     }
 });
 
+var VISIBILITY_RELOAD_THRESHOLD_MS = 60 * 1000;
+var hiddenAt = null;
+document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+    } else if (document.visibilityState === "visible" && hiddenAt) {
+        var elapsed = Date.now() - hiddenAt;
+        hiddenAt = null;
+        if (elapsed > VISIBILITY_RELOAD_THRESHOLD_MS) {
+            location.reload();
+        }
+    }
+});
+
 fetch("/api/refresh-if-stale", { method: "POST" }).catch(function() {});
 
 document.addEventListener("DOMContentLoaded", function() {
