@@ -2,6 +2,11 @@ services:
   myfeeds:
     build: .
     command: web
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "80:5000"
     volumes:
@@ -29,6 +34,11 @@ services:
   scheduler:
     build: .
     command: scheduler
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - myfeeds-data:/app/data
     environment:
@@ -51,6 +61,11 @@ services:
   autoheal:
     image: willfarrell/autoheal
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - AUTOHEAL_CONTAINER_LABEL=autoheal
       - AUTOHEAL_INTERVAL=30
