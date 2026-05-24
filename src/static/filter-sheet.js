@@ -54,6 +54,17 @@ document.addEventListener("DOMContentLoaded", function() {
         return /[.*+?^${}()|[\]\\]/.test(str);
     }
 
+    var POSSESSIVE_SUFFIX = /['’]s$/i;
+    var LEADING_PUNCT = /^['"(\[‘“«]+/;
+    var TRAILING_PUNCT = /['"),.;:!?\]’”»]+$/;
+
+    function cleanSelectedWord(word) {
+        return word
+            .replace(LEADING_PUNCT, "")
+            .replace(TRAILING_PUNCT, "")
+            .replace(POSSESSIVE_SUFFIX, "");
+    }
+
     function countTerms(pattern) {
         if (!pattern) return 0;
         try {
@@ -470,7 +481,10 @@ document.addEventListener("DOMContentLoaded", function() {
     function getSelectedPhrase() {
         if (state.selectedWords.length === 0) return "";
         var sorted = state.selectedWords.slice().sort(function(a, b) { return a.idx - b.idx; });
-        return sorted.map(function(s) { return s.el.textContent; }).join(" ");
+        return sorted
+            .map(function(s) { return cleanSelectedWord(s.el.textContent); })
+            .filter(function(w) { return w; })
+            .join(" ");
     }
 
     function updateAddBtn() {
