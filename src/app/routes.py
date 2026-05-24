@@ -1,4 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash, Response
+import hmac
+
+from flask import (Blueprint, render_template, request, redirect, url_for,
+                   jsonify, flash, Response, session, current_app)
 
 from src.app.database import get_db
 from src.app.services import feed_service, article_service, filter_service, settings_service, opml_service
@@ -12,6 +15,34 @@ def health():
     db = get_db()
     db.execute("SELECT 1 FROM feeds LIMIT 1")
     return "ok", 200
+
+
+def _safe_next(next_url: str | None) -> str:
+    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return next_url
+    return url_for("main.index")
+
+
+@bp.route("/login", methods=["GET", "POST"])
+def login():
+    password = current_app.config.get("APP_PASSWORD")
+    if not password:
+        return redirect(url_for("main.index"))
+
+    error = None
+    if request.method == "POST":
+        if hmac.compare_digest(request.form.get("password", ""), password):
+            session.permanent = True
+            session["authenticated"] = True
+            return redirect(_safe_next(request.args.get("next")))
+        error = "Incorrect password"
+    return render_template("login.html", error=error)
+
+
+@bp.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("main.login"))
 
 
 @bp.route("/")

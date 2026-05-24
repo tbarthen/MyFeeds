@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in · MyFeeds</title>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; background: #1a1d21; color: #e6e6e6;
+               display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .login-card { background: #24282e; padding: 32px; border-radius: 12px; width: 100%; max-width: 320px;
+                      box-shadow: 0 4px 24px rgba(0,0,0,.4); box-sizing: border-box; }
+        h1 { font-size: 20px; margin: 0 0 20px; text-align: center; }
+        label { display: block; font-size: 13px; margin-bottom: 6px; color: #9aa0a6; }
+        input[type=password] { width: 100%; padding: 10px 12px; border: 1px solid #3a3f46; border-radius: 8px;
+                               background: #1a1d21; color: #e6e6e6; font-size: 15px; box-sizing: border-box; }
+        button { width: 100%; margin-top: 16px; padding: 10px; border: none; border-radius: 8px;
+                 background: #2d5a87; color: #fff; font-size: 15px; cursor: pointer; }
+        button:hover { background: #356aa0; }
+        .error { color: #ef6b6b; font-size: 13px; margin-top: 12px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>MyFeeds</h1>
+        <form method="post">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" autofocus autocomplete="current-password" required>
+            <button type="submit">Sign in</button>
+            {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        </form>
+    </div>
+</body>
+</html>

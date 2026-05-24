@@ -2,9 +2,19 @@ import atexit
 import logging
 import os
 import sys
+from datetime import timedelta
 
-from flask import Flask
+from flask import Flask, redirect, request, session, url_for
 from src.app.database import init_db
+
+
+AUTH_EXEMPT_PREFIXES = ("/login", "/health", "/static/")
+WEAK_SECRET_KEYS = {
+    "dev-secret-key-change-in-production",
+    "change-me-in-production",
+    "change-me",
+    "not-needed-for-scheduler",
+}
 
 
 def _configure_logging() -> None:
@@ -31,9 +41,19 @@ def create_app(config: dict | None = None) -> Flask:
     app.config["DATABASE"] = os.environ.get("DATABASE_PATH", "myfeeds.db")
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
     app.config["SCHEDULER_ENABLED"] = os.environ.get("SCHEDULER_ENABLED", "true").lower() == "true"
+    app.config["APP_PASSWORD"] = os.environ.get("APP_PASSWORD")
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365)
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     if config:
         app.config.update(config)
+
+    if app.config.get("APP_PASSWORD") and app.config["SECRET_KEY"] in WEAK_SECRET_KEYS:
+        logging.getLogger(__name__).critical(
+            "APP_PASSWORD is set but SECRET_KEY is a known default; "
+            "session cookies are forgeable. Set a strong, unique SECRET_KEY."
+        )
 
     init_db(app)
 
@@ -49,6 +69,16 @@ def create_app(config: dict | None = None) -> Flask:
             "style-src 'self' 'unsafe-inline'"
         )
         return response
+
+    @app.before_request
+    def require_login():
+        if not app.config.get("APP_PASSWORD"):
+            return None
+        if request.path.startswith(AUTH_EXEMPT_PREFIXES):
+            return None
+        if session.get("authenticated"):
+            return None
+        return redirect(url_for("main.login", next=request.path))
 
     from src.app import routes
     app.register_blueprint(routes.bp)
