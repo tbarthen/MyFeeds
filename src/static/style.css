@@ -33,14 +33,15 @@ body {
 
 .app {
     display: flex;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 /* Sidebar */
 .sidebar {
     width: 260px;
     height: 100vh;
+    height: 100dvh;
     position: fixed;
     top: 0;
     left: 0;
@@ -381,7 +382,6 @@ div.nav-row,
     display: flex;
     flex-direction: column;
     min-width: 0;
-    overflow-y: auto;
 }
 
 .content-header {
@@ -951,6 +951,7 @@ mark {
         left: 0;
         width: 280px;
         height: 100vh;
+        height: 100dvh;
         transform: translateX(-100%);
         transition: transform 0.3s ease;
         z-index: 100;
@@ -971,6 +972,7 @@ mark {
 
     .sidebar-nav {
         max-height: calc(100vh - 160px);
+        max-height: calc(100dvh - 160px);
         overflow-y: auto;
     }
 
@@ -1575,7 +1577,9 @@ mark {
 @media (any-pointer: coarse), (max-width: 768px) {
     .filter-sheet {
         max-height: 100vh;
+        max-height: 100dvh;
         height: 100vh;
+        height: 100dvh;
         border-radius: 0;
     }
 
