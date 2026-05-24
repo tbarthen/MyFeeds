@@ -5,7 +5,7 @@ MODE=${1:-web}
 
 if [ "$MODE" = "web" ]; then
     mkdir -p /tmp/gunicorn && chown appuser:appuser /tmp/gunicorn
-    exec su -s /bin/sh appuser -c 'gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 2 --timeout 60 --worker-tmp-dir /dev/shm --control-socket /tmp/gunicorn/control.sock run:app'
+    exec su -s /bin/sh appuser -c 'gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 2 --timeout 60 --worker-tmp-dir /dev/shm --control-socket /tmp/gunicorn/control.sock --access-logfile - run:app'
 elif [ "$MODE" = "scheduler" ]; then
     exec su -s /bin/sh appuser -c 'python -m src.scheduler_runner'
 else
