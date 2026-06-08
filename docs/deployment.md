@@ -66,17 +66,28 @@ Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
 Unattended-Upgrade::Verbose "false";
 ```
 
+The apt service itself is CPU-capped to 30% of one core via `/etc/systemd/system/apt-daily-upgrade.service.d/cpu-limit.conf`:
+
+```
+[Service]
+CPUQuota=30%
+```
+
+This throttles the whole service tree (apt, dpkg, `initramfs-update`, all children). `MinimalSteps` spreads work *between* transactions, but operations like initramfs regeneration are a single atomic subprocess — the cap is what flattens those. Tradeoff: apt takes longer (~3× wall clock), which is intentional and irrelevant at Mon 07:00 PDT when the VM is otherwise idle. **If this cap is ever removed, expect the CPU alert to fire harder and the alert calibration may need re-tuning.**
+
 `apt-daily.timer` (package-list refresh) is left at its default — it doesn't produce visible spikes.
 
 ### Reapplying after VM rebuild
 
-Both files live on the VM, not in this repo. If the VM is recreated, run:
+All three files live on the VM, not in this repo. If the VM is recreated, run:
 
 ```bash
 gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 \
-  --command="sudo mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d && \
+  --command="sudo mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d /etc/systemd/system/apt-daily-upgrade.service.d && \
   printf '[Timer]\nOnCalendar=\nOnCalendar=Mon 14:00 UTC\nRandomizedDelaySec=0\nPersistent=true\n' | \
     sudo tee /etc/systemd/system/apt-daily-upgrade.timer.d/override.conf && \
+  printf '[Service]\nCPUQuota=30%%\n' | \
+    sudo tee /etc/systemd/system/apt-daily-upgrade.service.d/cpu-limit.conf && \
   printf 'Unattended-Upgrade::AutoFixInterruptedDpkg \"true\";\nUnattended-Upgrade::MinimalSteps \"true\";\nUnattended-Upgrade::Remove-Unused-Kernel-Packages \"true\";\nUnattended-Upgrade::Remove-New-Unused-Dependencies \"true\";\nUnattended-Upgrade::Verbose \"false\";\n' | \
     sudo tee /etc/apt/apt.conf.d/55unattended-upgrades-myfeeds.conf && \
   sudo systemctl daemon-reload && sudo systemctl restart apt-daily-upgrade.timer"
@@ -85,6 +96,7 @@ gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 
 Verify with:
 ```bash
 systemctl list-timers apt-daily-upgrade.timer
+systemctl show apt-daily-upgrade.service -p CPUQuotaPerSecUSec
 sudo apt-config dump | grep -E 'Unattended-Upgrade::(MinimalSteps|Remove-Unused-Kernel-Packages|Verbose)'
 ```
 
