@@ -152,3 +152,86 @@ class TestUnreadCount:
         with app.app_context():
             count = article_service.get_unread_count(feed_id=sample_feed)
             assert count == 2
+
+
+class TestCleanupOldArticles:
+    def _insert(self, db, feed_id, guid, is_read, is_saved, age_days):
+        db.execute(
+            "INSERT INTO articles (feed_id, guid, title, is_read, is_saved, created_at) "
+            "VALUES (?, ?, ?, ?, ?, datetime('now', ?))",
+            (feed_id, guid, guid, is_read, is_saved, f"-{age_days} days")
+        )
+
+    def test_deletes_old_read_unsaved(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "old-read", is_read=1, is_saved=0, age_days=8)
+            db.commit()
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 1
+            assert article_service.get_articles() == []
+
+    def test_deletes_old_unread_unsaved(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "old-unread", is_read=0, is_saved=0, age_days=8)
+            db.commit()
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 1
+
+    def test_keeps_saved_regardless_of_age(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "ancient-saved", is_read=1, is_saved=1, age_days=365)
+            db.commit()
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 0
+            remaining = article_service.get_articles(saved_only=True)
+            assert len(remaining) == 1
+
+    def test_keeps_recent_articles(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "recent-read", is_read=1, is_saved=0, age_days=2)
+            self._insert(db, sample_feed, "recent-unread", is_read=0, is_saved=0, age_days=6)
+            db.commit()
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 0
+            assert len(article_service.get_articles()) == 2
+
+    def test_mixed_set(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "old-1", is_read=1, is_saved=0, age_days=30)
+            self._insert(db, sample_feed, "old-2", is_read=0, is_saved=0, age_days=10)
+            self._insert(db, sample_feed, "old-saved", is_read=1, is_saved=1, age_days=30)
+            self._insert(db, sample_feed, "recent", is_read=1, is_saved=0, age_days=1)
+            db.commit()
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 2
+            remaining = sorted(a.title for a in article_service.get_articles())
+            assert remaining == ["old-saved", "recent"]
+
+    def test_cascades_to_filter_matches(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "old-filtered", is_read=1, is_saved=0, age_days=14)
+            article_id = db.execute(
+                "SELECT id FROM articles WHERE guid = 'old-filtered'"
+            ).fetchone()["id"]
+            db.execute(
+                "INSERT INTO filters (name, pattern, target) VALUES ('t', 'x', 'both')"
+            )
+            filter_id = db.execute("SELECT id FROM filters").fetchone()["id"]
+            db.execute(
+                "INSERT INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
+                (article_id, filter_id)
+            )
+            db.commit()
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 1
+            orphans = db.execute(
+                "SELECT COUNT(*) AS n FROM filter_matches WHERE article_id = ?",
+                (article_id,)
+            ).fetchone()["n"]
+            assert orphans == 0

@@ -111,3 +111,20 @@ def get_saved_count() -> int:
     db = get_db()
     row = db.execute("SELECT COUNT(*) as count FROM articles WHERE is_saved = 1").fetchone()
     return row["count"]
+
+
+def cleanup_old_articles(retention_days: int) -> int:
+    """Delete articles older than retention_days; saved articles are always kept.
+
+    Returns the number of articles deleted. Rows in filter_matches are removed
+    automatically via ON DELETE CASCADE.
+    """
+    days = int(retention_days)
+    db = get_db()
+    cursor = db.execute(
+        "DELETE FROM articles WHERE is_saved = 0 "
+        "AND created_at < datetime('now', ?)",
+        (f"-{days} days",)
+    )
+    db.commit()
+    return cursor.rowcount

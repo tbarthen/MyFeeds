@@ -12,6 +12,8 @@ _app = None
 
 ON_DEMAND_POLL_SECONDS = 30
 ON_DEMAND_COOLDOWN_MINUTES = 5
+RETENTION_DAYS = 7
+CLEANUP_INTERVAL_HOURS = 6
 
 
 def _run_refresh(trigger: str):
@@ -48,6 +50,21 @@ def refresh_all_feeds_job():
             return
 
         _run_refresh("scheduled")
+
+
+def cleanup_old_articles_job():
+    if _app is None:
+        return
+
+    with _app.app_context():
+        from src.app.services import article_service
+
+        deleted = article_service.cleanup_old_articles(RETENTION_DAYS)
+        if deleted > 0:
+            logger.info(
+                "Article cleanup: deleted %d articles older than %d days",
+                deleted, RETENTION_DAYS
+            )
 
 
 def check_on_demand_refresh_job():
@@ -100,6 +117,14 @@ def init_scheduler(app):
         check_on_demand_refresh_job,
         trigger=IntervalTrigger(seconds=ON_DEMAND_POLL_SECONDS),
         id="check_on_demand_refresh",
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        cleanup_old_articles_job,
+        trigger=IntervalTrigger(hours=CLEANUP_INTERVAL_HOURS),
+        id="cleanup_old_articles",
+        next_run_time=datetime.now(timezone.utc) + timedelta(seconds=30),
         replace_existing=True
     )
 
