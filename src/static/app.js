@@ -1,11 +1,31 @@
+var VISIBILITY_RELOAD_THRESHOLD_MS = 60 * 1000;
+var REACHABILITY_TIMEOUT_MS = 4000;
+var hiddenAt = null;
+
+function reloadIfReachable() {
+    if (navigator.onLine === false) {
+        return;
+    }
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, REACHABILITY_TIMEOUT_MS);
+    fetch("/health", { method: "HEAD", cache: "no-store", signal: controller.signal })
+        .then(function(response) {
+            clearTimeout(timer);
+            if (response.ok) {
+                location.reload();
+            }
+        })
+        .catch(function() {
+            clearTimeout(timer);
+        });
+}
+
 window.addEventListener("pageshow", function(event) {
     if (event.persisted) {
-        location.reload();
+        reloadIfReachable();
     }
 });
 
-var VISIBILITY_RELOAD_THRESHOLD_MS = 60 * 1000;
-var hiddenAt = null;
 document.addEventListener("visibilitychange", function() {
     if (document.visibilityState === "hidden") {
         hiddenAt = Date.now();
@@ -13,7 +33,7 @@ document.addEventListener("visibilitychange", function() {
         var elapsed = Date.now() - hiddenAt;
         hiddenAt = null;
         if (elapsed > VISIBILITY_RELOAD_THRESHOLD_MS) {
-            location.reload();
+            reloadIfReachable();
         }
     }
 });
