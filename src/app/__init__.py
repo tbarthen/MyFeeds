@@ -5,6 +5,7 @@ import sys
 from datetime import timedelta
 
 from flask import Flask, redirect, request, session, url_for
+from werkzeug.exceptions import HTTPException
 from src.app.database import init_db
 
 
@@ -77,6 +78,10 @@ def create_app(config: dict | None = None) -> Flask:
         if request.path.startswith(AUTH_EXEMPT_PREFIXES):
             return None
         if session.get("authenticated"):
+            return None
+        try:
+            app.url_map.bind("").match(request.path, method=request.method)
+        except HTTPException:
             return None
         return redirect(url_for("main.login", next=request.path))
 

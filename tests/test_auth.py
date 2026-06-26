@@ -46,3 +46,16 @@ def test_open_redirect_is_blocked(auth_client):
 
 def test_no_password_configured_leaves_app_open(client):
     assert client.get("/").status_code == 200
+
+
+def test_unknown_path_404s_instead_of_redirecting(auth_client):
+    assert auth_client.get("/vendor/phpunit/eval-stdin.php").status_code == 404
+    assert auth_client.get("/.env").status_code == 404
+    assert auth_client.get("/wp-admin").status_code == 404
+
+
+def test_wrong_method_on_real_route_does_not_redirect(auth_client):
+    # / accepts GET only; POST should 405, not redirect to /login (which would
+    # cost a kilobyte of login HTML to whatever scanner sent the POST).
+    resp = auth_client.post("/")
+    assert resp.status_code != 302
