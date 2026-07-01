@@ -2,6 +2,9 @@ from src.app.database import get_db
 from src.app.models import Article
 
 
+RETENTION_DAYS = 7
+
+
 def get_articles(
     feed_id: int | None = None,
     unread_only: bool = False,
@@ -114,15 +117,17 @@ def get_saved_count() -> int:
 
 
 def cleanup_old_articles(retention_days: int) -> int:
-    """Delete articles older than retention_days; saved articles are always kept.
+    """Delete read, unsaved articles older than retention_days.
 
-    Returns the number of articles deleted. Rows in filter_matches are removed
-    automatically via ON DELETE CASCADE.
+    Unread articles are always kept so nothing is purged before it has been
+    seen; saved articles are always kept regardless of age. Returns the number
+    of articles deleted. Rows in filter_matches are removed automatically via
+    ON DELETE CASCADE.
     """
     days = int(retention_days)
     db = get_db()
     cursor = db.execute(
-        "DELETE FROM articles WHERE is_saved = 0 "
+        "DELETE FROM articles WHERE is_saved = 0 AND is_read = 1 "
         "AND created_at < datetime('now', ?)",
         (f"-{days} days",)
     )

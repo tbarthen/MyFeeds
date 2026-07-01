@@ -171,13 +171,14 @@ class TestCleanupOldArticles:
             assert article_service.cleanup_old_articles(retention_days=7) == 1
             assert article_service.get_articles() == []
 
-    def test_deletes_old_unread_unsaved(self, app, sample_feed):
+    def test_keeps_old_unread_unsaved(self, app, sample_feed):
         with app.app_context():
             db = get_db()
             self._insert(db, sample_feed, "old-unread", is_read=0, is_saved=0, age_days=8)
             db.commit()
 
-            assert article_service.cleanup_old_articles(retention_days=7) == 1
+            assert article_service.cleanup_old_articles(retention_days=7) == 0
+            assert len(article_service.get_articles()) == 1
 
     def test_keeps_saved_regardless_of_age(self, app, sample_feed):
         with app.app_context():
@@ -202,15 +203,15 @@ class TestCleanupOldArticles:
     def test_mixed_set(self, app, sample_feed):
         with app.app_context():
             db = get_db()
-            self._insert(db, sample_feed, "old-1", is_read=1, is_saved=0, age_days=30)
-            self._insert(db, sample_feed, "old-2", is_read=0, is_saved=0, age_days=10)
+            self._insert(db, sample_feed, "old-read", is_read=1, is_saved=0, age_days=30)
+            self._insert(db, sample_feed, "old-unread", is_read=0, is_saved=0, age_days=10)
             self._insert(db, sample_feed, "old-saved", is_read=1, is_saved=1, age_days=30)
             self._insert(db, sample_feed, "recent", is_read=1, is_saved=0, age_days=1)
             db.commit()
 
-            assert article_service.cleanup_old_articles(retention_days=7) == 2
+            assert article_service.cleanup_old_articles(retention_days=7) == 1
             remaining = sorted(a.title for a in article_service.get_articles())
-            assert remaining == ["old-saved", "recent"]
+            assert remaining == ["old-saved", "old-unread", "recent"]
 
     def test_cascades_to_filter_matches(self, app, sample_feed):
         with app.app_context():

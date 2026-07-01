@@ -2,7 +2,7 @@ import html
 import re
 import sqlite3
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Tuple
 from urllib.parse import urlparse
 
@@ -117,7 +117,7 @@ def refresh_feed(feed_id: int) -> Tuple[int, str | None]:
     """, (datetime.now(timezone.utc).isoformat(), result.etag, result.last_modified, feed_id))
     db.commit()
 
-    new_count = save_articles_from_parsed(feed_id, result.parsed)
+    new_count = save_articles_from_parsed(feed_id, result.parsed, apply_age_gate=True)
     return new_count, None
 
 
@@ -235,12 +235,35 @@ def extract_image_url(entry) -> str | None:
     return None
 
 
-def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -> int:
-    from src.app.services import filter_service
+def _parse_entry_datetime(entry) -> datetime | None:
+    """Return an entry's published (or updated) time, or None if it has neither."""
+    if entry.get("published_parsed"):
+        return datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+    if entry.get("updated_parsed"):
+        return datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+    return None
+
+
+def _guid_is_seen(db: sqlite3.Connection, feed_id: int, guid: str) -> bool:
+    return db.execute(
+        "SELECT 1 FROM seen_guids WHERE feed_id = ? AND guid = ?", (feed_id, guid)
+    ).fetchone() is not None
+
+
+def _record_seen_guid(db: sqlite3.Connection, feed_id: int, guid: str) -> None:
+    db.execute(
+        "INSERT OR IGNORE INTO seen_guids (feed_id, guid) VALUES (?, ?)", (feed_id, guid)
+    )
+
+
+def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict,
+                              apply_age_gate: bool = False) -> int:
+    from src.app.services import article_service, filter_service
 
     db = get_db()
     new_count = 0
     compiled_filters = filter_service.get_compiled_active_filters()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=article_service.RETENTION_DAYS)
 
     new_articles = []
 
@@ -248,6 +271,15 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -
         guid = entry.get("id") or entry.get("link") or entry.get("title", "")
         if not guid:
             continue
+
+        published_dt = _parse_entry_datetime(entry)
+        undated = published_dt is None
+
+        if apply_age_gate:
+            if not undated and published_dt < cutoff:
+                continue
+            if undated and _guid_is_seen(db, feed_id, guid):
+                continue
 
         title = html.unescape(entry.get("title", ""))
         summary = html.unescape(entry.get("summary", ""))
@@ -257,11 +289,7 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -
         url = entry.get("link", "")
         image_url = extract_image_url(entry)
 
-        published_at = None
-        if entry.get("published_parsed"):
-            published_at = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc).isoformat()
-        elif entry.get("updated_parsed"):
-            published_at = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc).isoformat()
+        published_at = published_dt.isoformat() if published_dt else None
 
         try:
             cursor = db.execute("""
@@ -270,6 +298,8 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict) -
             """, (feed_id, guid, title, summary, content, url, image_url, published_at))
             new_articles.append((cursor.lastrowid, title, summary))
             new_count += 1
+            if undated:
+                _record_seen_guid(db, feed_id, guid)
         except sqlite3.IntegrityError:
             pass
 

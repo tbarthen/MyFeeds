@@ -61,6 +61,16 @@ def _run_migrations(db: sqlite3.Connection) -> None:
     _backfill_article_images(db)
     _add_column_if_missing(db, "feeds", "etag", "TEXT")
     _add_column_if_missing(db, "feeds", "last_modified", "TEXT")
+    _backfill_seen_guids(db)
+
+
+def _backfill_seen_guids(db: sqlite3.Connection) -> None:
+    """Seed tombstones from existing undated articles so they can't resurrect."""
+    db.execute(
+        "INSERT OR IGNORE INTO seen_guids (feed_id, guid) "
+        "SELECT feed_id, guid FROM articles WHERE published_at IS NULL"
+    )
+    db.commit()
 
 
 def _backfill_article_images(db: sqlite3.Connection) -> None:
@@ -110,6 +120,13 @@ CREATE TABLE IF NOT EXISTS articles (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE,
     UNIQUE(feed_id, guid)
+);
+
+CREATE TABLE IF NOT EXISTS seen_guids (
+    feed_id INTEGER NOT NULL,
+    guid TEXT NOT NULL,
+    FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE,
+    PRIMARY KEY (feed_id, guid)
 );
 
 CREATE TABLE IF NOT EXISTS filters (

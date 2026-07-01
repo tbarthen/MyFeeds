@@ -67,7 +67,7 @@ A personal RSS reader with intelligent filtering. The core problem: free RSS rea
 |--------|------|-------|
 | id | INTEGER PK | |
 | feed_id | INTEGER FK | |
-| guid | TEXT | Unique per feed (dedup) |
+| guid | TEXT | Unique per feed (dedup); see seen_guids for undated feeds |
 | title | TEXT | |
 | summary | TEXT | |
 | content | TEXT | Raw content for re-filtering |
@@ -94,6 +94,16 @@ A personal RSS reader with intelligent filtering. The core problem: free RSS rea
 | article_id | INTEGER FK | |
 | filter_id | INTEGER FK | |
 | matched_at | DATETIME | |
+
+### seen_guids
+Tombstone of guids ever ingested from undated feeds, so a purged article can't be
+re-imported as new once its article row is gone. Only populated for entries with no
+published/updated date (dated entries are handled by the refresh age gate). Cascade-deleted with the feed.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| feed_id | INTEGER FK | Part of PK |
+| guid | TEXT | Part of PK |
 
 ## Implementation Phases
 
@@ -140,7 +150,10 @@ A personal RSS reader with intelligent filtering. The core problem: free RSS rea
 
 CC should ask before assuming:
 
-1. **Article retention** — Keep forever, or auto-delete after N days?
+1. **Article retention** — Resolved: auto-delete read, unsaved articles after 7 days
+   (`RETENTION_DAYS` in article_service). Unread and saved articles are always kept.
+   Refresh is age-gated to the same window, with a seen_guids tombstone for undated
+   feeds, so purged articles don't reappear.
 2. **Re-filtering** — When a new filter is added, apply to existing unread articles only, or all articles?
 3. **Filter precedence** — If multiple filters match, store all matches or just first?
 4. **Refresh failure handling** — Silent retry, or surface errors to user?

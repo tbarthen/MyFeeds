@@ -12,7 +12,6 @@ _app = None
 
 ON_DEMAND_POLL_SECONDS = 30
 ON_DEMAND_COOLDOWN_MINUTES = 5
-RETENTION_DAYS = 7
 CLEANUP_INTERVAL_HOURS = 6
 
 
@@ -59,11 +58,11 @@ def cleanup_old_articles_job():
     with _app.app_context():
         from src.app.services import article_service
 
-        deleted = article_service.cleanup_old_articles(RETENTION_DAYS)
+        deleted = article_service.cleanup_old_articles(article_service.RETENTION_DAYS)
         if deleted > 0:
             logger.info(
                 "Article cleanup: deleted %d articles older than %d days",
-                deleted, RETENTION_DAYS
+                deleted, article_service.RETENTION_DAYS
             )
 
 

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -142,3 +143,72 @@ class TestRefreshFeed:
 
             assert new_count == 0
             assert error == "Feed not found"
+
+
+class TestRefreshFeedAgeGate:
+    def test_refresh_skips_entries_older_than_retention(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            from src.app.services import article_service
+
+            added_feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+
+            old = (datetime.now(timezone.utc) - timedelta(days=30)).timetuple()
+            recent = (datetime.now(timezone.utc) - timedelta(days=1)).timetuple()
+            mock_feedparser.return_value = make_mock_parsed_feed(entries=[
+                {"id": "old", "title": "Old", "link": "https://example.com/old",
+                 "published_parsed": old},
+                {"id": "recent", "title": "Recent", "link": "https://example.com/recent",
+                 "published_parsed": recent},
+            ])
+
+            new_count, error = feed_service.refresh_feed(added_feed.id)
+
+            assert error is None
+            assert new_count == 1
+            titles = [a.title for a in article_service.get_articles(feed_id=added_feed.id)]
+            assert "Recent" in titles
+            assert "Old" not in titles
+
+    def test_refresh_keeps_undated_entries(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            from src.app.services import article_service
+
+            added_feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+
+            mock_feedparser.return_value = make_mock_parsed_feed(entries=[
+                {"id": "undated", "title": "Undated", "link": "https://example.com/undated"},
+            ])
+
+            new_count, error = feed_service.refresh_feed(added_feed.id)
+
+            assert error is None
+            assert new_count == 1
+            titles = [a.title for a in article_service.get_articles(feed_id=added_feed.id)]
+            assert "Undated" in titles
+
+    def test_tombstone_prevents_undated_resurrection_after_purge(
+        self, app, mock_requests_get, mock_feedparser
+    ):
+        with app.app_context():
+            from src.app.database import get_db
+            from src.app.services import article_service
+
+            added_feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+
+            undated_feed = make_mock_parsed_feed(entries=[
+                {"id": "undated", "title": "Undated", "link": "https://example.com/undated"},
+            ])
+            mock_feedparser.return_value = undated_feed
+
+            first_count, _ = feed_service.refresh_feed(added_feed.id)
+            assert first_count == 1
+
+            get_db().execute("DELETE FROM articles WHERE guid = 'undated'")
+            get_db().commit()
+
+            second_count, error = feed_service.refresh_feed(added_feed.id)
+
+            assert error is None
+            assert second_count == 0
+            titles = [a.title for a in article_service.get_articles(feed_id=added_feed.id)]
+            assert "Undated" not in titles
