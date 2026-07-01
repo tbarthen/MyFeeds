@@ -236,3 +236,43 @@ class TestApiRoutes:
         response = client.put("/api/filters/1",
                               content_type="application/json")
         assert response.status_code == 400
+
+    def _seed_articles(self, app):
+        with app.app_context():
+            db = get_db()
+            feed_id = db.execute(
+                "INSERT INTO feeds (url, title) VALUES (?, ?)",
+                ("https://example.com/feed.xml", "Test Feed")
+            ).lastrowid
+            rows = [
+                ("a1", "Python news", "body", 0, 0),
+                ("a2", "More python", "body", 0, 0),
+                ("a3", "Python read", "body", 1, 0),
+                ("a4", "Python saved", "body", 0, 1),
+                ("a5", "Sports", "body", 0, 0),
+            ]
+            for guid, title, summary, is_read, is_saved in rows:
+                db.execute(
+                    "INSERT INTO articles (feed_id, guid, title, summary, is_read, is_saved) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (feed_id, guid, title, summary, is_read, is_saved)
+                )
+            db.commit()
+
+    def test_api_match_count(self, client, app):
+        self._seed_articles(app)
+        response = client.post("/api/filters/match-count",
+                               json={"pattern": "python", "target": "both"})
+        assert response.status_code == 200
+        assert response.json["count"] == 2
+
+    def test_api_match_count_bad_regex(self, client):
+        response = client.post("/api/filters/match-count",
+                               json={"pattern": "[invalid", "target": "both"})
+        assert response.status_code == 400
+        assert "error" in response.json
+
+    def test_api_match_count_requires_pattern(self, client):
+        response = client.post("/api/filters/match-count",
+                               json={"pattern": "", "target": "both"})
+        assert response.status_code == 400

@@ -173,6 +173,25 @@ def apply_filter_to_existing_articles(filter_obj: Filter) -> int:
     return len(match_ids)
 
 
+def count_unread_matches(pattern: str, target: str) -> int:
+    """Count unread, unsaved articles a pattern would catch if added as a filter.
+
+    Mirrors what apply_filter_to_existing_articles moves to the Filtered view on
+    add: saved articles are exempt, and already-filtered articles are read so
+    they're excluded here. Assumes pattern is a valid regex.
+    """
+    db = get_db()
+    rows = db.execute(
+        "SELECT title, summary FROM articles WHERE is_saved = 0 AND is_read = 0"
+    ).fetchall()
+
+    compiled = re.compile(pattern, re.IGNORECASE)
+    return sum(
+        1 for row in rows
+        if article_matches_filter(row["title"], row["summary"], compiled, target)
+    )
+
+
 def reapply_all_filters() -> int:
     db = get_db()
 

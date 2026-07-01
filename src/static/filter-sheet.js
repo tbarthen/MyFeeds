@@ -659,6 +659,38 @@ document.addEventListener("DOMContentLoaded", function() {
         return { pattern: pattern, flags: flags };
     }
 
+    var matchCountToken = 0;
+
+    function setMatchCount(text, muted) {
+        var el = document.getElementById("testMatchCount");
+        if (!el) return;
+        el.textContent = text;
+        el.classList.toggle("count-muted", !!muted);
+    }
+
+    function fetchMatchCount(pattern) {
+        var target = (state.selectedFilter && state.selectedFilter.target) || "both";
+        var token = ++matchCountToken;
+        setMatchCount("Counting matches\u2026", true);
+
+        fetch("/api/filters/match-count", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pattern: pattern, target: target })
+        }).then(function(r) {
+            if (!r.ok) return r.json().then(function(d) { throw new Error(d.error); });
+            return r.json();
+        }).then(function(data) {
+            if (token !== matchCountToken) return;
+            var n = data.count;
+            var label = n === 1 ? " unread article" : " unread articles";
+            setMatchCount("Would filter " + n + label, n === 0);
+        }).catch(function() {
+            if (token !== matchCountToken) return;
+            setMatchCount("Couldn't count matches", true);
+        });
+    }
+
     function runTest() {
         var pattern = buildPattern();
         testPatternDisplay.textContent = pattern;
@@ -671,8 +703,12 @@ document.addEventListener("DOMContentLoaded", function() {
             testError.textContent = "Invalid regex: " + e.message;
             testError.style.display = "";
             testResult.innerHTML = '<span class="no-match">Cannot test \u2014 fix the pattern</span>';
+            matchCountToken++;
+            setMatchCount("", true);
             return;
         }
+
+        fetchMatchCount(pattern);
 
         var html = "";
         html += '<div class="test-section">';

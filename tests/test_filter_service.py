@@ -364,3 +364,43 @@ class TestRegexValidation:
             assert filter_service.is_valid_regex(r"[invalid") is False
             assert filter_service.is_valid_regex(r"(unclosed") is False
             assert filter_service.is_valid_regex(r"*invalid") is False
+
+
+class TestCountUnreadMatches:
+    def _insert(self, db, feed_id, guid, title, summary, is_read=0, is_saved=0):
+        db.execute(
+            "INSERT INTO articles (feed_id, guid, title, summary, is_read, is_saved) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (feed_id, guid, title, summary, is_read, is_saved)
+        )
+
+    def test_counts_only_unread_unsaved_matches(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "u1", "Python news", "body")
+            self._insert(db, sample_feed, "u2", "More python", "body")
+            self._insert(db, sample_feed, "r1", "Python read", "body", is_read=1)
+            self._insert(db, sample_feed, "s1", "Python saved", "body", is_saved=1)
+            self._insert(db, sample_feed, "n1", "Sports", "body")
+            db.commit()
+
+            assert filter_service.count_unread_matches("python", "both") == 2
+
+    def test_respects_target(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "t1", "Python in title", "nothing")
+            self._insert(db, sample_feed, "t2", "nothing", "python in summary")
+            db.commit()
+
+            assert filter_service.count_unread_matches("python", "title") == 1
+            assert filter_service.count_unread_matches("python", "summary") == 1
+            assert filter_service.count_unread_matches("python", "both") == 2
+
+    def test_no_matches_returns_zero(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "n1", "Sports news", "football")
+            db.commit()
+
+            assert filter_service.count_unread_matches("python", "both") == 0

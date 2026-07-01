@@ -279,6 +279,29 @@ def api_filters():
 
 MAX_FILTER_NAME_LENGTH = 200
 MAX_FILTER_PATTERN_LENGTH = 5000
+VALID_FILTER_TARGETS = ("title", "summary", "both")
+
+
+@bp.route("/api/filters/match-count", methods=["POST"])
+def api_filter_match_count():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    pattern = (data.get("pattern") or "").strip()
+    target = data.get("target", "both")
+
+    if not pattern:
+        return jsonify({"error": "Pattern is required"}), 400
+    if len(pattern) > MAX_FILTER_PATTERN_LENGTH:
+        return jsonify({"error": "Pattern too long"}), 400
+    if target not in VALID_FILTER_TARGETS:
+        return jsonify({"error": "Invalid target"}), 400
+    if not filter_service.is_valid_regex(pattern):
+        return jsonify({"error": "Invalid regex pattern"}), 400
+
+    count = filter_service.count_unread_matches(pattern, target)
+    return jsonify({"count": count})
 
 
 @bp.route("/api/filters", methods=["POST"])

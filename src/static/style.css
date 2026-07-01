@@ -1529,6 +1529,18 @@ mark {
     font-style: italic;
 }
 
+.test-match-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-bottom: 12px;
+}
+
+.test-match-count.count-muted {
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
 .test-pattern-display {
     margin-bottom: 12px;
 }
