@@ -188,18 +188,18 @@ div.nav-row,
     flex-shrink: 0;
 }
 
-.nav-row .feed-actions {
-    display: flex;
+/* Row layout: eye toggle (primary) | feed name | count | ⋮ menu (rare actions) */
+.nav-row .feed-hide-form {
+    display: inline-flex;
     align-items: center;
-    gap: 2px;
     flex-shrink: 0;
 }
 
-/* Eye toggle is the primary, always-visible control; the ⋮ menu fades in. */
 .btn-eye {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .btn-eye .eye {
@@ -225,6 +225,7 @@ div.nav-row,
 .feed-menu {
     position: relative;
     display: inline-flex;
+    flex-shrink: 0;
 }
 
 .btn-feed-menu {
@@ -291,14 +292,6 @@ div.nav-row,
     min-width: 0;
     text-decoration: none;
     color: inherit;
-}
-
-.nav-row-link .icon {
-    font-size: 16px;
-    width: 20px;
-    text-align: center;
-    color: var(--text-muted);
-    flex-shrink: 0;
 }
 
 .nav-row-link .label {
@@ -1059,17 +1052,17 @@ mark {
         overflow-y: auto;
     }
 
-    .nav-row .feed-actions {
-        opacity: 1;
-    }
-
     .btn-feed-menu {
         opacity: 1;
     }
 
     .nav-row .btn-eye,
     .nav-row .btn-feed-menu {
-        padding: 8px;
+        min-width: 44px;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .content-header {
