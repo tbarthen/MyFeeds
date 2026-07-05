@@ -96,6 +96,15 @@ def delete_feed(feed_id: int):
     return redirect(url_for("main.index"))
 
 
+@bp.route("/feeds/<int:feed_id>/toggle-hidden", methods=["POST"])
+def toggle_feed_hidden(feed_id: int):
+    new_state = feed_service.toggle_feed_hidden(feed_id)
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"success": new_state is not None, "hidden": bool(new_state)})
+    return redirect(request.referrer or url_for("main.index"))
+
+
 @bp.route("/feeds/<int:feed_id>/refresh", methods=["POST"])
 def refresh_feed(feed_id: int):
     feed_service.refresh_feed(feed_id)

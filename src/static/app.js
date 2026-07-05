@@ -360,6 +360,103 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
+    // ── Feed visibility (eye toggle) ──
+    function adjustAllFeedsCount(delta) {
+        var allRow = document.querySelector('.nav-row[data-feed-id="all"]');
+        if (!allRow) return;
+        var allCount = allRow.querySelector(".count");
+        if (!allCount) return;
+        var current = parseInt(allCount.textContent) || 0;
+        var updated = Math.max(0, current + delta);
+        allCount.textContent = updated;
+        allCount.style.display = updated > 0 ? "" : "none";
+    }
+
+    document.querySelectorAll(".feed-hide-form").forEach(function(form) {
+        form.addEventListener("submit", function(e) {
+            e.preventDefault();
+            var row = form.closest(".nav-row");
+            if (!row) return;
+            var wasHidden = row.classList.contains("feed-hidden");
+            row.classList.toggle("feed-hidden");
+
+            var btn = form.querySelector(".btn-eye");
+            if (btn) {
+                var label = wasHidden ? "Hide feed" : "Show feed";
+                btn.title = label;
+                btn.setAttribute("aria-label", label);
+            }
+
+            var countEl = row.querySelector(".nav-row-link .count");
+            var n = countEl ? (parseInt(countEl.textContent) || 0) : 0;
+            if (n > 0) adjustAllFeedsCount(wasHidden ? n : -n);
+
+            fetch(form.action, {
+                method: "POST",
+                headers: { "X-Requested-With": "XMLHttpRequest" }
+            });
+        });
+    });
+
+    // ── Feed row ⋮ menu ──
+    function closeAllFeedMenus() {
+        document.querySelectorAll(".feed-menu.open").forEach(function(menu) {
+            menu.classList.remove("open");
+            var toggle = menu.querySelector(".btn-feed-menu");
+            if (toggle) toggle.setAttribute("aria-expanded", "false");
+        });
+    }
+
+    document.querySelectorAll(".btn-feed-menu").forEach(function(toggle) {
+        toggle.addEventListener("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var menu = toggle.closest(".feed-menu");
+            if (!menu) return;
+            var willOpen = !menu.classList.contains("open");
+            closeAllFeedMenus();
+            if (willOpen) {
+                menu.classList.add("open");
+                toggle.setAttribute("aria-expanded", "true");
+            }
+        });
+    });
+
+    document.addEventListener("click", function() {
+        closeAllFeedMenus();
+    });
+
+    // ── Unsubscribe confirm modal ──
+    var unsubModal = document.getElementById("unsubscribeFeedModal");
+    if (unsubModal) {
+        var unsubName = document.getElementById("unsubscribeFeedName");
+        var unsubCancel = document.getElementById("unsubscribeFeedCancel");
+        var unsubConfirm = document.getElementById("unsubscribeFeedConfirm");
+        var pendingUnsubForm = null;
+
+        function closeUnsubModal() {
+            unsubModal.classList.remove("active");
+            pendingUnsubForm = null;
+        }
+
+        document.querySelectorAll(".feed-unsub-form").forEach(function(form) {
+            form.addEventListener("submit", function(e) {
+                e.preventDefault();
+                pendingUnsubForm = form;
+                unsubName.textContent = form.dataset.feedName || "this feed";
+                unsubModal.classList.add("active");
+            });
+        });
+
+        unsubCancel.addEventListener("click", closeUnsubModal);
+        unsubModal.addEventListener("click", function(e) {
+            if (e.target === unsubModal) closeUnsubModal();
+        });
+        unsubConfirm.addEventListener("click", function() {
+            if (pendingUnsubForm) pendingUnsubForm.submit();
+        });
+    }
+
     // Filter inline edit toggle
     document.querySelectorAll(".btn-edit").forEach(function(btn) {
         btn.addEventListener("click", function() {

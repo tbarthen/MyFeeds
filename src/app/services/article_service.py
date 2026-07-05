@@ -25,6 +25,8 @@ def get_articles(
     if feed_id is not None:
         query += " AND a.feed_id = ?"
         params.append(feed_id)
+    elif not saved_only:
+        query += " AND f.hidden = 0"
 
     if unread_only:
         query += " AND a.is_read = 0"
@@ -105,7 +107,11 @@ def get_unread_count(feed_id: int | None = None) -> int:
             (feed_id,)
         ).fetchone()
     else:
-        row = db.execute("SELECT COUNT(*) as count FROM articles WHERE is_read = 0").fetchone()
+        row = db.execute(
+            "SELECT COUNT(*) as count FROM articles a "
+            "JOIN feeds f ON a.feed_id = f.id "
+            "WHERE a.is_read = 0 AND f.hidden = 0"
+        ).fetchone()
 
     return row["count"]
 

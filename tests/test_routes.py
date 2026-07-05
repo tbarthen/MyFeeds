@@ -101,6 +101,34 @@ class TestFeedRoutes:
         )
         assert response.status_code == 200
 
+    def test_toggle_hidden_ajax(self, client, app, mock_feed_fetch):
+        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
+
+        with app.app_context():
+            feed = get_db().execute("SELECT id FROM feeds").fetchone()
+
+        response = client.post(
+            f"/feeds/{feed['id']}/toggle-hidden",
+            headers={"X-Requested-With": "XMLHttpRequest"}
+        )
+        assert response.status_code == 200
+        assert response.json["hidden"] is True
+
+        response = client.post(
+            f"/feeds/{feed['id']}/toggle-hidden",
+            headers={"X-Requested-With": "XMLHttpRequest"}
+        )
+        assert response.json["hidden"] is False
+
+    def test_toggle_hidden_redirects_without_ajax(self, client, app, mock_feed_fetch):
+        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
+
+        with app.app_context():
+            feed = get_db().execute("SELECT id FROM feeds").fetchone()
+
+        response = client.post(f"/feeds/{feed['id']}/toggle-hidden")
+        assert response.status_code == 302
+
     def test_refresh_all_feeds(self, client, mock_feed_fetch):
         client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
 

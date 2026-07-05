@@ -46,7 +46,7 @@
 
         <!-- Feeds -->
         {% for feed in feeds %}
-        <div class="nav-row {% if selected_feed_id == feed.id %}active{% endif %}" data-feed-id="{{ feed.id }}">
+        <div class="nav-row {% if selected_feed_id == feed.id %}active{% endif %} {% if feed.hidden %}feed-hidden{% endif %}" data-feed-id="{{ feed.id }}">
             <a href="{{ url_for('main.index', feed_id=feed.id, unread=unread_only|int) }}"
                class="nav-row-link"
                title="{{ feed.title or feed.url }}">
@@ -58,13 +58,28 @@
                 {% endif %}
             </a>
             <span class="feed-actions">
-                <form action="{{ url_for('main.refresh_feed', feed_id=feed.id) }}" method="post" class="inline-form">
-                    <button type="submit" class="btn-icon" title="Refresh">&#x21bb;</button>
+                <form action="{{ url_for('main.toggle_feed_hidden', feed_id=feed.id) }}" method="post" class="inline-form feed-hide-form">
+                    <button type="submit" class="btn-icon btn-eye"
+                            title="{{ 'Show feed' if feed.hidden else 'Hide feed' }}"
+                            aria-label="{{ 'Show feed' if feed.hidden else 'Hide feed' }}">
+                        <span class="eye eye-open" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
+                        <span class="eye eye-off" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
+                    </button>
                 </form>
-                <form action="{{ url_for('main.delete_feed', feed_id=feed.id) }}" method="post" class="inline-form"
-                      onsubmit="return confirm('Delete this feed?')">
-                    <button type="submit" class="btn-icon btn-danger" title="Delete">&times;</button>
-                </form>
+                <div class="feed-menu">
+                    <button type="button" class="btn-icon btn-feed-menu" title="More actions"
+                            aria-label="More actions" aria-haspopup="true" aria-expanded="false">&#x22EE;</button>
+                    <div class="feed-menu-dropdown" role="menu">
+                        <form action="{{ url_for('main.refresh_feed', feed_id=feed.id) }}" method="post" class="inline-form">
+                            <button type="submit" class="feed-menu-item" role="menuitem">Refresh</button>
+                        </form>
+                        <div class="feed-menu-divider"></div>
+                        <form action="{{ url_for('main.delete_feed', feed_id=feed.id) }}" method="post"
+                              class="inline-form feed-unsub-form" data-feed-name="{{ feed.title or feed.url }}">
+                            <button type="submit" class="feed-menu-item feed-menu-item-danger" role="menuitem">Unsubscribe</button>
+                        </form>
+                    </div>
+                </div>
             </span>
         </div>
         {% endfor %}
@@ -171,6 +186,20 @@
         <span class="undo-toast-text">Marked as read</span>
         <button type="button" class="undo-toast-btn" id="undoBtn">Undo</button>
         <button type="button" class="undo-toast-close" id="undoDismiss">&times;</button>
+    </div>
+
+    <div class="confirm-modal-overlay" id="unsubscribeFeedModal">
+        <div class="confirm-modal">
+            <p class="confirm-modal-message">
+                Unsubscribe from '<span id="unsubscribeFeedName"></span>'? This deletes the
+                feed and all of its articles &mdash; including any you've saved &mdash; and
+                can't be undone. To just hide it, use the eye icon instead.
+            </p>
+            <div class="confirm-modal-actions">
+                <button type="button" class="btn-small" id="unsubscribeFeedCancel">Cancel</button>
+                <button type="button" class="btn-small btn-danger" id="unsubscribeFeedConfirm">Unsubscribe</button>
+            </div>
+        </div>
     </div>
 </main>
 {% endblock %}

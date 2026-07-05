@@ -117,6 +117,66 @@ class TestDeleteFeed:
             assert result is False
 
 
+class TestFeedVisibility:
+    def test_new_feed_is_visible_by_default(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            assert feed.hidden is False
+
+    def test_set_and_toggle_hidden(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+
+            assert feed_service.set_feed_hidden(feed.id, True) is True
+            assert feed_service.get_feed_by_id(feed.id).hidden is True
+
+            assert feed_service.toggle_feed_hidden(feed.id) is False
+            assert feed_service.get_feed_by_id(feed.id).hidden is False
+
+            assert feed_service.toggle_feed_hidden(feed.id) is True
+            assert feed_service.get_feed_by_id(feed.id).hidden is True
+
+    def test_toggle_hidden_missing_feed_returns_none(self, app):
+        with app.app_context():
+            assert feed_service.toggle_feed_hidden(999) is None
+
+    def test_hidden_feed_excluded_from_aggregate_views(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            from src.app.services import article_service
+
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            assert article_service.get_unread_count() == 1
+            assert len(article_service.get_articles()) == 1
+
+            feed_service.set_feed_hidden(feed.id, True)
+
+            assert article_service.get_unread_count() == 0
+            assert article_service.get_articles() == []
+            assert len(article_service.get_articles(feed_id=feed.id)) == 1
+
+    def test_hidden_feed_saved_articles_still_visible(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            from src.app.services import article_service
+
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            article = article_service.get_articles(feed_id=feed.id)[0]
+            article_service.toggle_saved(article.id)
+
+            feed_service.set_feed_hidden(feed.id, True)
+
+            assert len(article_service.get_articles(saved_only=True)) == 1
+
+    def test_hidden_feeds_sorted_last(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            visible, _ = feed_service.add_feed("https://a.com/feed.xml")
+            hidden, _ = feed_service.add_feed("https://b.com/feed.xml")
+            feed_service.set_feed_hidden(hidden.id, True)
+
+            feeds = feed_service.get_all_feeds()
+            assert feeds[0].id == visible.id
+            assert feeds[-1].id == hidden.id
+
+
 class TestRefreshFeed:
     def test_refresh_feed_adds_new_articles(self, app, mock_requests_get, mock_feedparser):
         with app.app_context():

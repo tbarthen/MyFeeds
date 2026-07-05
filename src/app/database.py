@@ -61,6 +61,7 @@ def _run_migrations(db: sqlite3.Connection) -> None:
     _backfill_article_images(db)
     _add_column_if_missing(db, "feeds", "etag", "TEXT")
     _add_column_if_missing(db, "feeds", "last_modified", "TEXT")
+    _add_column_if_missing(db, "feeds", "hidden", "INTEGER NOT NULL DEFAULT 0")
     _backfill_seen_guids(db)
 
 

@@ -27,7 +27,7 @@ def get_all_feeds() -> list[Feed]:
         FROM feeds f
         LEFT JOIN articles a ON f.id = a.feed_id
         GROUP BY f.id
-        ORDER BY f.title COLLATE NOCASE
+        ORDER BY f.hidden, f.title COLLATE NOCASE
     """).fetchall()
     return [Feed.from_row(row) for row in rows]
 
@@ -76,6 +76,28 @@ def delete_feed(feed_id: int) -> bool:
     cursor = db.execute("DELETE FROM feeds WHERE id = ?", (feed_id,))
     db.commit()
     return cursor.rowcount > 0
+
+
+def set_feed_hidden(feed_id: int, hidden: bool) -> bool:
+    db = get_db()
+    cursor = db.execute(
+        "UPDATE feeds SET hidden = ? WHERE id = ?",
+        (1 if hidden else 0, feed_id)
+    )
+    db.commit()
+    return cursor.rowcount > 0
+
+
+def toggle_feed_hidden(feed_id: int) -> bool | None:
+    db = get_db()
+    row = db.execute("SELECT hidden FROM feeds WHERE id = ?", (feed_id,)).fetchone()
+    if not row:
+        return None
+
+    new_value = 0 if row["hidden"] else 1
+    db.execute("UPDATE feeds SET hidden = ? WHERE id = ?", (new_value, feed_id))
+    db.commit()
+    return bool(new_value)
 
 
 def refresh_feed(feed_id: int) -> Tuple[int, str | None]:

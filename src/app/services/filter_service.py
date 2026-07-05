@@ -365,6 +365,10 @@ def get_filter_match_count(filter_id: int) -> int:
 def get_total_filtered_count() -> int:
     db = get_db()
     row = db.execute(
-        "SELECT COUNT(DISTINCT article_id) as count FROM filter_matches"
+        "SELECT COUNT(DISTINCT fm.article_id) as count "
+        "FROM filter_matches fm "
+        "JOIN articles a ON a.id = fm.article_id "
+        "JOIN feeds f ON a.feed_id = f.id "
+        "WHERE f.hidden = 0"
     ).fetchone()
     return row["count"]

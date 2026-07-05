@@ -24,6 +24,7 @@ class Feed:
     unread_count: int = 0
     etag: str | None = None
     last_modified: str | None = None
+    hidden: bool = False
 
     @classmethod
     def from_row(cls, row) -> "Feed":
@@ -40,6 +41,7 @@ class Feed:
             unread_count=row["unread_count"] if "unread_count" in keys else 0,
             etag=row["etag"] if "etag" in keys else None,
             last_modified=row["last_modified"] if "last_modified" in keys else None,
+            hidden=bool(row["hidden"]) if "hidden" in keys else False,
         )
 
 
