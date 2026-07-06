@@ -13,6 +13,11 @@
     --danger-color: #f44336;
     --star-color: #ffc107;
     --saved-color: #ccff00;
+    /* Elevated floating surfaces (menus): lighter than the app/sidebar so they
+       read as a distinct layer in dark mode, where shadows are ineffective. */
+    --menu-bg: #383838;
+    --menu-border: #555555;
+    --menu-hover: #484848;
 }
 
 * {
@@ -246,10 +251,10 @@ div.nav-row,
     margin-top: 4px;
     min-width: 150px;
     padding: 4px;
-    background: var(--content-bg);
-    border: 1px solid var(--border-color);
+    background: var(--menu-bg);
+    border: 1px solid var(--menu-border);
     border-radius: 6px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
     z-index: 50;
 }
 
@@ -271,7 +276,7 @@ div.nav-row,
 }
 
 .feed-menu-item:hover {
-    background: var(--hover-bg);
+    background: var(--menu-hover);
 }
 
 .feed-menu-divider {
