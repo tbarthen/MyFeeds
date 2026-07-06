@@ -39,6 +39,8 @@ def export_opml() -> str:
     body = ET.SubElement(opml, "body")
 
     for feed in feeds:
+        if feed.url == feed_service.UNSUBSCRIBED_FEED_URL:
+            continue
         attrs = {
             "type": "rss",
             "text": feed.title or feed.url,

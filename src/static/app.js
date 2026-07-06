@@ -457,6 +457,38 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    // ── Permanently-delete unsubscribed feeds confirm modal (Settings) ──
+    var delUnsubForm = document.getElementById("unsubscribedFeedsForm");
+    var delUnsubBtn = document.getElementById("deleteUnsubBtn");
+    var delUnsubModal = document.getElementById("deleteUnsubModal");
+    if (delUnsubForm && delUnsubBtn && delUnsubModal) {
+        var delUnsubUrl = delUnsubBtn.getAttribute("formaction");
+        var delUnsubCancel = document.getElementById("deleteUnsubCancel");
+        var delUnsubConfirm = document.getElementById("deleteUnsubConfirm");
+        var delUnsubCount = document.getElementById("deleteUnsubCount");
+
+        delUnsubBtn.addEventListener("click", function(e) {
+            var n = delUnsubForm.querySelectorAll('input[name="feed_ids"]:checked').length;
+            if (n === 0) return;
+            e.preventDefault();
+            if (delUnsubCount) delUnsubCount.textContent = n;
+            delUnsubModal.classList.add("active");
+        });
+
+        delUnsubCancel.addEventListener("click", function() {
+            delUnsubModal.classList.remove("active");
+        });
+
+        delUnsubModal.addEventListener("click", function(e) {
+            if (e.target === delUnsubModal) delUnsubModal.classList.remove("active");
+        });
+
+        delUnsubConfirm.addEventListener("click", function() {
+            delUnsubForm.action = delUnsubUrl;
+            delUnsubForm.submit();
+        });
+    }
+
     // Filter inline edit toggle
     document.querySelectorAll(".btn-edit").forEach(function(btn) {
         btn.addEventListener("click", function() {

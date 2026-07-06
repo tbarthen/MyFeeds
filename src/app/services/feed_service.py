@@ -18,18 +18,54 @@ MAX_ERROR_COUNT = 3
 USER_AGENT = "MyFeeds/1.0 (RSS Reader; +https://github.com/myfeeds)"
 ALLOWED_SCHEMES = {"http", "https"}
 
+UNSUBSCRIBED_FEED_URL = "myfeeds:unsubscribed"
+UNSUBSCRIBED_FEED_TITLE = "Unsubscribed"
+
 
 def get_all_feeds() -> list[Feed]:
+    """Feeds shown in the sidebar: active subscriptions, plus the Unsubscribed
+    archive only while it actually holds articles."""
     db = get_db()
     rows = db.execute("""
         SELECT f.*,
-               COUNT(CASE WHEN a.is_read = 0 THEN 1 END) as unread_count
+               COUNT(CASE WHEN a.is_read = 0 THEN 1 END) as unread_count,
+               COUNT(a.id) as total_count
         FROM feeds f
         LEFT JOIN articles a ON f.id = a.feed_id
+        WHERE f.unsubscribed = 0
         GROUP BY f.id
+        HAVING f.url != ? OR total_count > 0
         ORDER BY f.hidden, f.title COLLATE NOCASE
+    """, (UNSUBSCRIBED_FEED_URL,)).fetchall()
+    return [Feed.from_row(row) for row in rows]
+
+
+def get_unsubscribed_feeds() -> list[Feed]:
+    db = get_db()
+    rows = db.execute("""
+        SELECT f.*, 0 as unread_count
+        FROM feeds f
+        WHERE f.unsubscribed = 1
+        ORDER BY f.title COLLATE NOCASE
     """).fetchall()
     return [Feed.from_row(row) for row in rows]
+
+
+def get_or_create_unsubscribed_feed() -> int:
+    """Return the id of the persistent 'Unsubscribed' archive feed, creating it
+    on first use."""
+    db = get_db()
+    row = db.execute(
+        "SELECT id FROM feeds WHERE url = ?", (UNSUBSCRIBED_FEED_URL,)
+    ).fetchone()
+    if row:
+        return row["id"]
+    cursor = db.execute(
+        "INSERT INTO feeds (url, title, site_url) VALUES (?, ?, ?)",
+        (UNSUBSCRIBED_FEED_URL, UNSUBSCRIBED_FEED_TITLE, "")
+    )
+    db.commit()
+    return cursor.lastrowid
 
 
 def get_feed_by_id(feed_id: int) -> Feed | None:
@@ -71,13 +107,6 @@ def add_feed(url: str) -> Tuple[Feed | None, str | None]:
     return get_feed_by_id(feed_id), None
 
 
-def delete_feed(feed_id: int) -> bool:
-    db = get_db()
-    cursor = db.execute("DELETE FROM feeds WHERE id = ?", (feed_id,))
-    db.commit()
-    return cursor.rowcount > 0
-
-
 def set_feed_hidden(feed_id: int, hidden: bool) -> bool:
     db = get_db()
     cursor = db.execute(
@@ -100,13 +129,76 @@ def toggle_feed_hidden(feed_id: int) -> bool | None:
     return bool(new_value)
 
 
+def unsubscribe_feed(feed_id: int) -> bool:
+    """Non-destructive unsubscribe: move the feed's articles to the Unsubscribed
+    archive and flag the original so it stops fetching and leaves the sidebar,
+    while keeping its config for a later resubscribe."""
+    db = get_db()
+    feed = db.execute(
+        "SELECT id, url, unsubscribed FROM feeds WHERE id = ?", (feed_id,)
+    ).fetchone()
+    if not feed or feed["unsubscribed"] or feed["url"] == UNSUBSCRIBED_FEED_URL:
+        return False
+
+    archive_id = get_or_create_unsubscribed_feed()
+    db.execute(
+        "UPDATE OR IGNORE articles SET feed_id = ? WHERE feed_id = ?",
+        (archive_id, feed_id)
+    )
+    db.execute("DELETE FROM articles WHERE feed_id = ?", (feed_id,))
+    db.execute("UPDATE feeds SET unsubscribed = 1 WHERE id = ?", (feed_id,))
+    db.commit()
+    return True
+
+
+def resubscribe_feeds(feed_ids: list[int]) -> int:
+    """Restore unsubscribed feeds as active subscriptions and reset their fetch
+    state so the next refresh pulls fresh articles. Old articles stay under the
+    Unsubscribed archive."""
+    if not feed_ids:
+        return 0
+
+    db = get_db()
+    count = 0
+    for feed_id in feed_ids:
+        cursor = db.execute("""
+            UPDATE feeds
+            SET unsubscribed = 0, etag = NULL, last_modified = NULL,
+                fetch_error_count = 0, last_error = NULL
+            WHERE id = ? AND unsubscribed = 1
+        """, (feed_id,))
+        count += cursor.rowcount
+    db.commit()
+    return count
+
+
+def delete_unsubscribed_feeds(feed_ids: list[int]) -> int:
+    """Permanently remove unsubscribed feeds' retained config so they can no
+    longer be resubscribed. Their old articles already live under the
+    Unsubscribed archive (a different feed_id) and are left untouched."""
+    if not feed_ids:
+        return 0
+
+    db = get_db()
+    count = 0
+    for feed_id in feed_ids:
+        cursor = db.execute(
+            "DELETE FROM feeds WHERE id = ? AND unsubscribed = 1", (feed_id,)
+        )
+        count += cursor.rowcount
+    db.commit()
+    return count
+
+
 def refresh_feed(feed_id: int) -> Tuple[int, str | None]:
     db = get_db()
     feed_row = db.execute(
-        "SELECT url, etag, last_modified FROM feeds WHERE id = ?", (feed_id,)
+        "SELECT url, etag, last_modified, unsubscribed FROM feeds WHERE id = ?", (feed_id,)
     ).fetchone()
     if not feed_row:
         return 0, "Feed not found"
+    if feed_row["unsubscribed"] or feed_row["url"] == UNSUBSCRIBED_FEED_URL:
+        return 0, None
 
     result = fetch_and_parse_feed(feed_row["url"], etag=feed_row["etag"],
                                    last_modified=feed_row["last_modified"])
@@ -150,6 +242,8 @@ def refresh_all_feeds() -> dict[int, Tuple[int, str | None]]:
     results = {}
     feeds = get_all_feeds()
     for i, feed in enumerate(feeds):
+        if feed.url == UNSUBSCRIBED_FEED_URL:
+            continue
         if feed.fetch_error_count >= MAX_ERROR_COUNT:
             results[feed.id] = (0, f"skipped: {feed.fetch_error_count} consecutive errors")
             continue

@@ -274,10 +274,6 @@ div.nav-row,
     background: var(--hover-bg);
 }
 
-.feed-menu-item-danger {
-    color: var(--danger-color);
-}
-
 .feed-menu-divider {
     height: 1px;
     margin: 4px 0;
@@ -786,6 +782,13 @@ a.filter-matches-link:hover {
 .filter-edit-actions {
     display: flex;
     gap: 8px;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
 }
 
 /* Search Highlight */

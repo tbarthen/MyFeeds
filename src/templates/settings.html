@@ -78,6 +78,42 @@
             </form>
         </section>
 
+        {% if unsubscribed_feeds %}
+        <section class="settings-section">
+            <h3>Unsubscribed Feeds</h3>
+            <p>These feeds were unsubscribed; their old articles remain under &ldquo;Unsubscribed.&rdquo; Select feeds, then resubscribe to resume fetching &mdash; or permanently delete them for good.</p>
+            <form id="unsubscribedFeedsForm" action="{{ url_for('main.resubscribe_feeds') }}" method="post" class="settings-form">
+                {% for feed in unsubscribed_feeds %}
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="feed_ids" value="{{ feed.id }}">
+                        {{ feed.title or feed.url }}
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="settings-actions">
+                    <button type="submit" class="btn">Resubscribe Selected</button>
+                    <button type="submit" class="btn btn-danger" id="deleteUnsubBtn"
+                            formaction="{{ url_for('main.delete_unsubscribed_feeds') }}">Permanently Delete Selected</button>
+                </div>
+            </form>
+        </section>
+
+        <div class="confirm-modal-overlay" id="deleteUnsubModal">
+            <div class="confirm-modal">
+                <p class="confirm-modal-message">
+                    Permanently delete <span id="deleteUnsubCount"></span> feed(s)? They'll be
+                    removed for good and can no longer be resubscribed. Articles already kept
+                    under &ldquo;Unsubscribed&rdquo; are not affected.
+                </p>
+                <div class="confirm-modal-actions">
+                    <button type="button" class="btn-small" id="deleteUnsubCancel">Cancel</button>
+                    <button type="button" class="btn-small btn-danger" id="deleteUnsubConfirm">Delete</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <section class="settings-section">
             <h3>Import / Export Feeds</h3>
             <p>Import feeds from an OPML file or export your current subscriptions.</p>

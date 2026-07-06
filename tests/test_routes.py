@@ -75,19 +75,6 @@ class TestFeedRoutes:
         response = client.post("/feeds/add", data={"url": ""}, follow_redirects=True)
         assert response.status_code == 200
 
-    def test_delete_feed(self, client, app, mock_feed_fetch):
-        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
-
-        with app.app_context():
-            db = get_db()
-            feed = db.execute("SELECT id FROM feeds").fetchone()
-
-        response = client.post(
-            f"/feeds/{feed['id']}/delete",
-            follow_redirects=True
-        )
-        assert response.status_code == 200
-
     def test_refresh_feed(self, client, app, mock_feed_fetch):
         client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
 
@@ -128,6 +115,60 @@ class TestFeedRoutes:
 
         response = client.post(f"/feeds/{feed['id']}/toggle-hidden")
         assert response.status_code == 302
+
+    def test_unsubscribe_route(self, client, app, mock_feed_fetch):
+        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
+
+        with app.app_context():
+            feed = get_db().execute("SELECT id FROM feeds").fetchone()
+
+        response = client.post(f"/feeds/{feed['id']}/unsubscribe", follow_redirects=True)
+        assert response.status_code == 200
+
+        with app.app_context():
+            row = get_db().execute(
+                "SELECT unsubscribed FROM feeds WHERE id = ?", (feed["id"],)
+            ).fetchone()
+            assert row["unsubscribed"] == 1
+
+    def test_resubscribe_route(self, client, app, mock_feed_fetch):
+        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
+
+        with app.app_context():
+            feed = get_db().execute("SELECT id FROM feeds").fetchone()
+
+        client.post(f"/feeds/{feed['id']}/unsubscribe")
+        response = client.post(
+            "/feeds/resubscribe",
+            data={"feed_ids": str(feed["id"])},
+            follow_redirects=True
+        )
+        assert response.status_code == 200
+
+        with app.app_context():
+            row = get_db().execute(
+                "SELECT unsubscribed FROM feeds WHERE id = ?", (feed["id"],)
+            ).fetchone()
+            assert row["unsubscribed"] == 0
+
+    def test_delete_unsubscribed_route(self, client, app, mock_feed_fetch):
+        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
+
+        with app.app_context():
+            feed = get_db().execute("SELECT id FROM feeds").fetchone()
+
+        client.post(f"/feeds/{feed['id']}/unsubscribe")
+        response = client.post(
+            "/feeds/delete-unsubscribed",
+            data={"feed_ids": str(feed["id"])},
+            follow_redirects=True
+        )
+        assert response.status_code == 200
+
+        with app.app_context():
+            assert get_db().execute(
+                "SELECT COUNT(*) FROM feeds WHERE id = ?", (feed["id"],)
+            ).fetchone()[0] == 0
 
     def test_refresh_all_feeds(self, client, mock_feed_fetch):
         client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})

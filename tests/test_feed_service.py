@@ -102,21 +102,6 @@ class TestGetFeeds:
             assert feed is None
 
 
-class TestDeleteFeed:
-    def test_delete_feed_success(self, app, mock_requests_get, mock_feedparser):
-        with app.app_context():
-            added_feed, _ = feed_service.add_feed("https://example.com/feed.xml")
-            result = feed_service.delete_feed(added_feed.id)
-
-            assert result is True
-            assert feed_service.get_feed_by_id(added_feed.id) is None
-
-    def test_delete_feed_not_found(self, app):
-        with app.app_context():
-            result = feed_service.delete_feed(999)
-            assert result is False
-
-
 class TestFeedVisibility:
     def test_new_feed_is_visible_by_default(self, app, mock_requests_get, mock_feedparser):
         with app.app_context():
@@ -175,6 +160,115 @@ class TestFeedVisibility:
             feeds = feed_service.get_all_feeds()
             assert feeds[0].id == visible.id
             assert feeds[-1].id == hidden.id
+
+
+class TestUnsubscribe:
+    def _count(self, feed_id):
+        from src.app.database import get_db
+        return get_db().execute(
+            "SELECT COUNT(*) FROM articles WHERE feed_id = ?", (feed_id,)
+        ).fetchone()[0]
+
+    def _archive_id(self):
+        from src.app.database import get_db
+        row = get_db().execute(
+            "SELECT id FROM feeds WHERE url = ?", (feed_service.UNSUBSCRIBED_FEED_URL,)
+        ).fetchone()
+        return row["id"] if row else None
+
+    def test_unsubscribe_moves_articles_to_archive(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            from src.app.database import get_db
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+
+            assert feed_service.unsubscribe_feed(feed.id) is True
+
+            row = get_db().execute(
+                "SELECT unsubscribed FROM feeds WHERE id = ?", (feed.id,)
+            ).fetchone()
+            assert row["unsubscribed"] == 1
+            assert self._count(feed.id) == 0
+            assert self._count(self._archive_id()) == 1
+
+    def test_unsubscribed_feed_leaves_sidebar_archive_appears(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            feed_service.unsubscribe_feed(feed.id)
+
+            titles = [f.title for f in feed_service.get_all_feeds()]
+            assert "Test Feed" not in titles
+            assert feed_service.UNSUBSCRIBED_FEED_TITLE in titles
+
+    def test_archive_hidden_while_empty(self, app):
+        with app.app_context():
+            feed_service.get_or_create_unsubscribed_feed()
+            titles = [f.title for f in feed_service.get_all_feeds()]
+            assert feed_service.UNSUBSCRIBED_FEED_TITLE not in titles
+
+    def test_unsubscribed_feed_listed_in_picker(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            feed_service.unsubscribe_feed(feed.id)
+            assert [f.id for f in feed_service.get_unsubscribed_feeds()] == [feed.id]
+
+    def test_resubscribe_restores_feed_and_keeps_old_articles_archived(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            feed_service.unsubscribe_feed(feed.id)
+
+            assert feed_service.resubscribe_feeds([feed.id]) == 1
+            assert "Test Feed" in [f.title for f in feed_service.get_all_feeds()]
+            assert feed_service.get_unsubscribed_feeds() == []
+            assert self._count(feed.id) == 0
+            assert self._count(self._archive_id()) == 1
+
+    def test_cannot_unsubscribe_the_archive(self, app):
+        with app.app_context():
+            archive_id = feed_service.get_or_create_unsubscribed_feed()
+            assert feed_service.unsubscribe_feed(archive_id) is False
+
+    def test_duplicate_guid_merge_is_safe(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            a, _ = feed_service.add_feed("https://a.com/feed.xml")
+            b, _ = feed_service.add_feed("https://b.com/feed.xml")
+
+            assert feed_service.unsubscribe_feed(a.id) is True
+            assert feed_service.unsubscribe_feed(b.id) is True
+
+            assert self._count(self._archive_id()) == 1
+            assert self._count(b.id) == 0
+
+    def test_refresh_all_skips_archive(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            feed_service.unsubscribe_feed(feed.id)
+            results = feed_service.refresh_all_feeds()
+            assert self._archive_id() not in results
+
+    def test_delete_unsubscribed_removes_config_but_keeps_archive(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            from src.app.database import get_db
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            feed_service.unsubscribe_feed(feed.id)
+            archive_id = self._archive_id()
+            assert self._count(archive_id) == 1
+
+            assert feed_service.delete_unsubscribed_feeds([feed.id]) == 1
+            assert get_db().execute(
+                "SELECT COUNT(*) FROM feeds WHERE id = ?", (feed.id,)
+            ).fetchone()[0] == 0
+            assert self._count(archive_id) == 1
+            assert feed_service.get_unsubscribed_feeds() == []
+
+    def test_delete_unsubscribed_ignores_active_feeds(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            from src.app.database import get_db
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+
+            assert feed_service.delete_unsubscribed_feeds([feed.id]) == 0
+            assert get_db().execute(
+                "SELECT COUNT(*) FROM feeds WHERE id = ?", (feed.id,)
+            ).fetchone()[0] == 1
 
 
 class TestRefreshFeed:

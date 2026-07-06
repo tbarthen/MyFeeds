@@ -25,6 +25,7 @@ class Feed:
     etag: str | None = None
     last_modified: str | None = None
     hidden: bool = False
+    unsubscribed: bool = False
 
     @classmethod
     def from_row(cls, row) -> "Feed":
@@ -42,6 +43,7 @@ class Feed:
             etag=row["etag"] if "etag" in keys else None,
             last_modified=row["last_modified"] if "last_modified" in keys else None,
             hidden=bool(row["hidden"]) if "hidden" in keys else False,
+            unsubscribed=bool(row["unsubscribed"]) if "unsubscribed" in keys else False,
         )
 
 

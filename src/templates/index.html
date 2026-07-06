@@ -72,9 +72,9 @@
                         <button type="submit" class="feed-menu-item" role="menuitem">Refresh</button>
                     </form>
                     <div class="feed-menu-divider"></div>
-                    <form action="{{ url_for('main.delete_feed', feed_id=feed.id) }}" method="post"
+                    <form action="{{ url_for('main.unsubscribe_feed', feed_id=feed.id) }}" method="post"
                           class="inline-form feed-unsub-form" data-feed-name="{{ feed.title or feed.url }}">
-                        <button type="submit" class="feed-menu-item feed-menu-item-danger" role="menuitem">Unsubscribe</button>
+                        <button type="submit" class="feed-menu-item" role="menuitem">Unsubscribe</button>
                     </form>
                 </div>
             </div>
@@ -188,13 +188,13 @@
     <div class="confirm-modal-overlay" id="unsubscribeFeedModal">
         <div class="confirm-modal">
             <p class="confirm-modal-message">
-                Unsubscribe from '<span id="unsubscribeFeedName"></span>'? This deletes the
-                feed and all of its articles &mdash; including any you've saved &mdash; and
-                can't be undone. To just hide it, use the eye icon instead.
+                Unsubscribe from '<span id="unsubscribeFeedName"></span>'? Its articles are
+                kept and moved to &ldquo;Unsubscribed,&rdquo; and you can resubscribe from
+                Settings. Nothing is deleted.
             </p>
             <div class="confirm-modal-actions">
                 <button type="button" class="btn-small" id="unsubscribeFeedCancel">Cancel</button>
-                <button type="button" class="btn-small btn-danger" id="unsubscribeFeedConfirm">Unsubscribe</button>
+                <button type="button" class="btn-small" id="unsubscribeFeedConfirm">Unsubscribe</button>
             </div>
         </div>
     </div>

@@ -90,10 +90,33 @@ def add_feed():
     return redirect(url_for("main.index"))
 
 
-@bp.route("/feeds/<int:feed_id>/delete", methods=["POST"])
-def delete_feed(feed_id: int):
-    feed_service.delete_feed(feed_id)
-    return redirect(url_for("main.index"))
+@bp.route("/feeds/<int:feed_id>/unsubscribe", methods=["POST"])
+def unsubscribe_feed(feed_id: int):
+    feed_service.unsubscribe_feed(feed_id)
+    return redirect(request.referrer or url_for("main.index"))
+
+
+@bp.route("/feeds/resubscribe", methods=["POST"])
+def resubscribe_feeds():
+    feed_ids = [int(fid) for fid in request.form.getlist("feed_ids") if fid.isdigit()]
+    count = feed_service.resubscribe_feeds(feed_ids)
+    if count > 0:
+        settings_service.set_setting("refresh_requested", "1")
+        flash(f"Resubscribed to {count} feed(s)", "success")
+    else:
+        flash("No feeds selected", "info")
+    return redirect(url_for("main.settings_page"))
+
+
+@bp.route("/feeds/delete-unsubscribed", methods=["POST"])
+def delete_unsubscribed_feeds():
+    feed_ids = [int(fid) for fid in request.form.getlist("feed_ids") if fid.isdigit()]
+    count = feed_service.delete_unsubscribed_feeds(feed_ids)
+    if count > 0:
+        flash(f"Permanently deleted {count} feed(s)", "success")
+    else:
+        flash("No feeds selected", "info")
+    return redirect(url_for("main.settings_page"))
 
 
 @bp.route("/feeds/<int:feed_id>/toggle-hidden", methods=["POST"])
@@ -409,12 +432,14 @@ def settings_page():
     total_unread = article_service.get_unread_count()
     saved_count = article_service.get_saved_count()
     filtered_count = filter_service.get_total_filtered_count()
+    unsubscribed_feeds = feed_service.get_unsubscribed_feeds()
     return render_template(
         "settings.html",
         settings=settings,
         total_unread=total_unread,
         saved_count=saved_count,
-        filtered_count=filtered_count
+        filtered_count=filtered_count,
+        unsubscribed_feeds=unsubscribed_feeds
     )
 
 
