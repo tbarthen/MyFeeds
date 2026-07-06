@@ -75,6 +75,43 @@ class TestFeedRoutes:
         response = client.post("/feeds/add", data={"url": ""}, follow_redirects=True)
         assert response.status_code == 200
 
+    def test_add_feed_rejects_blocked_source(self, client, app):
+        with patch("src.app.services.feed_service.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(status_code=202, content=b"", headers={})
+            response = client.post(
+                "/feeds/add",
+                data={"url": "https://blocked.example.com/rss"},
+                follow_redirects=True
+            )
+            assert response.status_code == 200
+            assert b"Couldn&#39;t add this URL" in response.data or b"Couldn't add this URL" in response.data
+
+        with app.app_context():
+            cnt = get_db().execute(
+                "SELECT COUNT(*) FROM feeds WHERE url = ?",
+                ("https://blocked.example.com/rss",)
+            ).fetchone()[0]
+            assert cnt == 0
+
+    def test_add_feed_warns_on_zero_articles(self, client, app):
+        with patch("src.app.services.feed_service.requests.get") as mock_get, \
+             patch("src.app.services.feed_service.feedparser.parse") as mock_parse:
+            mock_get.return_value = MagicMock(status_code=200, content=b"<rss></rss>", headers={})
+            parsed = MockFeedParserDict()
+            parsed["feed"] = {"title": "Quiet Feed"}
+            parsed["entries"] = []
+            parsed["bozo"] = False
+            parsed["version"] = "rss20"
+            mock_parse.return_value = parsed
+
+            response = client.post(
+                "/feeds/add",
+                data={"url": "https://quiet.example.com/rss"},
+                follow_redirects=True
+            )
+            assert response.status_code == 200
+            assert b"no articles came in" in response.data
+
     def test_refresh_feed(self, client, app, mock_feed_fetch):
         client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
 

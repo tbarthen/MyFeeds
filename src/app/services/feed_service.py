@@ -301,8 +301,21 @@ def fetch_and_parse_feed(url: str, etag: str | None = None,
     except requests.RequestException as e:
         return FeedFetchResult(None, f"couldn't fetch: {str(e)}")
 
+    if not response.content or not response.content.strip():
+        return FeedFetchResult(
+            None, "that site returned an empty response (it may be blocking feed readers)"
+        )
+
     parsed = feedparser.parse(response.content)
-    if parsed.bozo and not parsed.entries:
+
+    feed_meta = parsed.feed if parsed.feed else {}
+    has_feed_content = bool(
+        parsed.entries
+        or parsed.get("version")
+        or feed_meta.get("title")
+        or feed_meta.get("link")
+    )
+    if not has_feed_content or (parsed.bozo and not parsed.entries):
         return FeedFetchResult(None, "that URL doesn't contain a valid RSS/Atom feed")
 
     MAX_HEADER_LEN = 256

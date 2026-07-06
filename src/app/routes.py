@@ -85,8 +85,13 @@ def add_feed():
             flash(f"This feed is already in your subscriptions", "info")
         else:
             flash(f"Couldn't add this URL — {error}", "warning")
-    else:
+    elif article_service.get_articles(feed_id=feed.id, limit=1):
         flash(f"Added: {feed.title}", "success")
+    else:
+        flash(
+            f"Added {feed.title}, but no articles came in — the feed may be empty or blocking readers",
+            "warning"
+        )
     return redirect(url_for("main.index"))
 
 

@@ -74,6 +74,49 @@ class TestAddFeed:
             assert articles[0].title == "Test Article"
 
 
+class TestFetchValidation:
+    def _resp(self, status, content, headers=None):
+        return MagicMock(status_code=status, content=content, headers=headers or {})
+
+    def test_rejects_empty_body_on_2xx(self, app):
+        with app.app_context():
+            with patch("src.app.services.feed_service.requests.get") as mock_get:
+                mock_get.return_value = self._resp(202, b"")
+                result = feed_service.fetch_and_parse_feed("https://blocked.example.com/rss")
+                assert result.parsed is None
+                assert result.error and "empty response" in result.error
+
+    def test_rejects_non_feed_content(self, app):
+        with app.app_context():
+            with patch("src.app.services.feed_service.requests.get") as mock_get, \
+                 patch("src.app.services.feed_service.feedparser.parse") as mock_parse:
+                mock_get.return_value = self._resp(200, b"<html>nope</html>")
+                parsed = MockFeedParserDict()
+                parsed["feed"] = {}
+                parsed["entries"] = []
+                parsed["bozo"] = False
+                parsed["version"] = ""
+                mock_parse.return_value = parsed
+                result = feed_service.fetch_and_parse_feed("https://example.com/notafeed")
+                assert result.error is not None
+
+    def test_accepts_valid_feed_with_no_items(self, app):
+        with app.app_context():
+            with patch("src.app.services.feed_service.requests.get") as mock_get, \
+                 patch("src.app.services.feed_service.feedparser.parse") as mock_parse:
+                mock_get.return_value = self._resp(200, b"<rss>...</rss>")
+                parsed = MockFeedParserDict()
+                parsed["feed"] = {"title": "Quiet Feed", "link": "https://quiet.example.com"}
+                parsed["entries"] = []
+                parsed["bozo"] = False
+                parsed["version"] = "rss20"
+                mock_parse.return_value = parsed
+                result = feed_service.fetch_and_parse_feed("https://quiet.example.com/rss")
+                assert result.error is None
+                assert result.parsed is not None
+                assert len(result.parsed.entries) == 0
+
+
 class TestGetFeeds:
     def test_get_all_feeds_empty(self, app):
         with app.app_context():
