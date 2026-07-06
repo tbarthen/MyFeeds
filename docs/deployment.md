@@ -75,23 +75,44 @@ CPUQuota=30%
 
 This throttles the whole service tree (apt, dpkg, `initramfs-update`, all children). `MinimalSteps` spreads work *between* transactions, but operations like initramfs regeneration are a single atomic subprocess — the cap is what flattens those. Tradeoff: apt takes longer (~3× wall clock), which is intentional and irrelevant at Mon 07:00 PDT when the VM is otherwise idle. **If this cap is ever removed, expect the CPU alert to fire harder and the alert calibration may need re-tuning.**
 
-`apt-daily.timer` (package-list refresh) is left at its default — it doesn't produce visible spikes.
+`apt-daily.service` (the package-list refresh unit) is capped the same way via `/etc/systemd/system/apt-daily.service.d/cpu-limit.conf` — it was the one remaining uncapped apt unit.
+
+### CPU spike forensics (detection harness)
+
+On 2026-07-06 the always-on 90% CPU tier fired at the tail of the Monday apt window (10-min mean → 99.8%), but **no retrospective log could attribute it**: apt was capped and used only 3 min CPU, no service restarted, no worker wedged. The box has no per-process CPU history (no atop/sysstat), so attribution was impossible after the fact.
+
+`/usr/local/bin/cpu-forensics.sh` + `cpu-forensics.timer` fix that. Every minute the script samples **instantaneous** CPU% from a 1s `/proc/stat` window (not the laggy 1-min loadavg — that both misses fast spikes and false-fires after they end); if ≥70% busy it appends a `top` snapshot + the hottest PID's **cgroup and cmdline** to `/var/log/cpu-forensics.log` (size-capped at 1 MB, self-truncating). It logs the `%Cpu(s)` line including the **`st` steal** field.
+
+This distinguishes the three hypotheses for a spike:
+- Hot guest process in some cgroup → real runaway; kill precisely.
+- apt/dpkg/needrestart in the apt cgroup → maintenance escaping the cap; tighten containment.
+- High `st` with no hot guest process → **hypervisor CPU steal** on this shared-core e2-micro (noisy neighbor); not our runaway — adjust the alert, don't chase.
+
+After a spike, read the log:
+```bash
+gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 \
+  --command="sudo cat /var/log/cpu-forensics.log"
+```
 
 ### Reapplying after VM rebuild
 
-All three files live on the VM, not in this repo. If the VM is recreated, run:
+These VM-side files are not in this repo. If the VM is recreated, reapply the apt timer/caps:
 
 ```bash
 gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 \
-  --command="sudo mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d /etc/systemd/system/apt-daily-upgrade.service.d && \
+  --command="sudo mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d /etc/systemd/system/apt-daily-upgrade.service.d /etc/systemd/system/apt-daily.service.d && \
   printf '[Timer]\nOnCalendar=\nOnCalendar=Mon 14:00 UTC\nRandomizedDelaySec=0\nPersistent=true\n' | \
     sudo tee /etc/systemd/system/apt-daily-upgrade.timer.d/override.conf && \
   printf '[Service]\nCPUQuota=30%%\n' | \
     sudo tee /etc/systemd/system/apt-daily-upgrade.service.d/cpu-limit.conf && \
+  printf '[Service]\nCPUQuota=30%%\n' | \
+    sudo tee /etc/systemd/system/apt-daily.service.d/cpu-limit.conf && \
   printf 'Unattended-Upgrade::AutoFixInterruptedDpkg \"true\";\nUnattended-Upgrade::MinimalSteps \"true\";\nUnattended-Upgrade::Remove-Unused-Kernel-Packages \"true\";\nUnattended-Upgrade::Remove-New-Unused-Dependencies \"true\";\nUnattended-Upgrade::Verbose \"false\";\n' | \
     sudo tee /etc/apt/apt.conf.d/55unattended-upgrades-myfeeds.conf && \
   sudo systemctl daemon-reload && sudo systemctl restart apt-daily-upgrade.timer"
 ```
+
+The CPU-forensics harness (`/usr/local/bin/cpu-forensics.sh`, `cpu-forensics.service`, `cpu-forensics.timer`) also lives only on the VM; its full source is the script deployed on 2026-07-06 — recreate it and `systemctl enable --now cpu-forensics.timer` if the VM is rebuilt.
 
 Verify with:
 ```bash
