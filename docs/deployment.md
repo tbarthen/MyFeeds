@@ -150,3 +150,5 @@ gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 
 ```
 
 Pre-auth, egress was anonymous external scraping. Post-auth, sustained egress more likely means heavy legitimate use or a stuck/looping client — the access log's IPs and user-agents will tell you which.
+
+**Benign one-off: an admin DB/OPML pull.** A single `gcloud compute scp` of the database off the VM (`myfeeds.db` ≈ 6 MB, or a DB + access-log grab ≈ 7–8 MB with SSH overhead) averages to ~2.3 KB/s over the 1-hour rate window — just over the 2 KiB/s sensitive threshold — so it trips `High Network Egress Alert` for exactly one hour and then clears on its own. This is hypervisor-level (SSH/scp) egress, so it will **not** appear in the `docker logs` access lines above — don't waste time hunting for a client IP. Confirmed 2026-07-05: the accidental-deletion recovery scp of the 6 MB DB + 1 MB access log produced a lone 2290 B/s spike at 12:00 UTC and nothing else; CPU and the always-on 10 KiB/s tier stayed quiet. If an egress alert lines up with a known admin download and only the sensitive tier fired, it's this — no action needed.
