@@ -81,17 +81,33 @@ This throttles the whole service tree (apt, dpkg, `initramfs-update`, all childr
 
 On 2026-07-06 the always-on 90% CPU tier fired at the tail of the Monday apt window (10-min mean → 99.8%), but **no retrospective log could attribute it**: apt was capped and used only 3 min CPU, no service restarted, no worker wedged. The box has no per-process CPU history (no atop/sysstat), so attribution was impossible after the fact.
 
-`/usr/local/bin/cpu-forensics.sh` + `cpu-forensics.timer` fix that. Every minute the script samples **instantaneous** CPU% from a 1s `/proc/stat` window (not the laggy 1-min loadavg — that both misses fast spikes and false-fires after they end); if ≥70% busy it appends a `top` snapshot + the hottest PID's **cgroup and cmdline** to `/var/log/cpu-forensics.log` (size-capped at 1 MB, self-truncating). It logs the `%Cpu(s)` line including the **`st` steal** field.
+`/usr/local/bin/cpu-forensics.sh` + `cpu-forensics.timer` fix that. Every minute the script computes the **60-second mean** CPU% and steal% from the `/proc/stat` delta since the previous tick (prev counters cached in `/run/cpu-forensics.prev`, tmpfs) and **always** appends one lightweight line to `/var/log/cpu-forensics.log`:
 
-This distinguishes the three hypotheses for a spike:
-- Hot guest process in some cgroup → real runaway; kill precisely.
-- apt/dpkg/needrestart in the apt cgroup → maintenance escaping the cap; tighten containment.
-- High `st` with no hot guest process → **hypervisor CPU steal** on this shared-core e2-micro (noisy neighbor); not our runaway — adjust the alert, don't chase.
+```
+TICK 2026-07-13T14:05:00Z cpu=8.3% st=1.2% load=0.30
+```
 
-After a spike, read the log:
+`cpu` is busy incl. steal (matches the alert signal); `st` is the steal component broken out. When the minute-mean is ≥70% it *additionally* appends a `DETAIL` block — a `top` snapshot with the `%Cpu(s)` line (incl. `st`) plus the hottest PID's **cgroup and cmdline**:
+
+```
+===== 2026-07-13T14:05:00Z DETAIL cpu=99.8% st=0.1% =====
+%Cpu(s): 99.0 us, 0.5 sy, ... 0.5 st
+  PID USER ... %CPU COMMAND
+  ...
+-- hottest PID 12345 cgroup: 0::/system.slice/...
+-- cmdline: ...
+```
+
+The log is size-capped at 1 MB (self-truncating to the tail 512 KB). At ~55 B/tick that is roughly a week and a half of unconditional history; local only, no egress, $0.
+
+**Reading it** — the always-on `TICK` trend is what resolves the 2026-07-06 ambiguity. During an alert window, `grep '^TICK'` shows exactly what in-guest CPU and steal were, minute by minute:
+- `TICK` cpu high (some `DETAIL` block names a hot process/cgroup) → real in-guest work; attribute via the cgroup (apt vs a container vs host).
+- `TICK` cpu low but `st` high → **hypervisor CPU steal** on this shared-core e2-micro (noisy neighbor); not our runaway — adjust the alert, don't chase.
+- Alert says ~99% but `TICK` cpu **and** `st` are both low → the GCE metric doesn't reflect in-guest work at all → **hypervisor/metric artifact**, not an in-guest event. (Previously this case left an *empty* log, indistinguishable from "sampler missed it"; the per-tick line makes it a positive finding.)
+
 ```bash
 gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 \
-  --command="sudo cat /var/log/cpu-forensics.log"
+  --command="sudo grep '^TICK' /var/log/cpu-forensics.log | tail -30; echo ---; sudo grep -A20 DETAIL /var/log/cpu-forensics.log | tail -60"
 ```
 
 ### Reapplying after VM rebuild
@@ -112,7 +128,7 @@ gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 
   sudo systemctl daemon-reload && sudo systemctl restart apt-daily-upgrade.timer"
 ```
 
-The CPU-forensics harness (`/usr/local/bin/cpu-forensics.sh`, `cpu-forensics.service`, `cpu-forensics.timer`) also lives only on the VM; its full source is the script deployed on 2026-07-06 — recreate it and `systemctl enable --now cpu-forensics.timer` if the VM is rebuilt.
+The CPU-forensics harness (`/usr/local/bin/cpu-forensics.sh`, `cpu-forensics.service`, `cpu-forensics.timer`) also lives only on the VM; its current source is the per-tick script deployed 2026-07-07 (60s-delta `TICK` line every minute + `DETAIL` on ≥70%, described above) — recreate it and `systemctl enable --now cpu-forensics.timer` if the VM is rebuilt.
 
 Verify with:
 ```bash
