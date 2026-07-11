@@ -131,6 +131,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 updateUnreadCount(feedId, 1);
                 if (articleEl) {
                     articleEl.classList.remove("is-read");
+                    syncReadToggleButton(articleEl, false);
                     expandArticle(articleEl);
                 }
                 hideUndoToast();
@@ -148,6 +149,16 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    function syncReadToggleButton(article, isRead) {
+        var form = article.querySelector('.article-actions form[action$="/read"], .article-actions form[action$="/unread"]');
+        if (!form) return;
+        var btn = form.querySelector("button");
+        if (btn) {
+            btn.textContent = isRead ? "Mark Unread" : "Mark Read";
+        }
+        form.action = form.action.replace(/\/(?:un)?read$/, isRead ? "/unread" : "/read");
+    }
+
     // Handle marking article as read with flash and undo toast
     function markAsReadWithAnimation(article) {
         var articleId = article.dataset.id;
@@ -157,6 +168,7 @@ document.addEventListener("DOMContentLoaded", function() {
         setTimeout(function() {
             article.classList.remove("just-read");
             article.classList.add("is-read");
+            syncReadToggleButton(article, true);
             // Only show undo toast in unread view (article will disappear)
             // In all view, user can just swipe to mark unread again
             if (isUnreadView()) {
@@ -216,6 +228,7 @@ document.addEventListener("DOMContentLoaded", function() {
         if (form.action.includes("/unread")) return;
 
         form.addEventListener("submit", function(e) {
+            if (/\/unread$/.test(form.action)) return;
             e.preventDefault();
             var article = form.closest(".article-item");
             if (!article) return;
@@ -226,11 +239,6 @@ document.addEventListener("DOMContentLoaded", function() {
                 method: "POST",
                 headers: { "X-Requested-With": "XMLHttpRequest" }
             });
-            var btn = form.querySelector("button");
-            if (btn) {
-                btn.textContent = "Mark Unread";
-                form.action = form.action.replace("/read", "/unread");
-            }
         });
     });
 
@@ -339,6 +347,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 } else {
                     updateUnreadCount(article.dataset.feedId, 1);
                     article.classList.remove("is-read");
+                    syncReadToggleButton(article, false);
                 }
                 fetch(endpoint, {
                     method: "POST",

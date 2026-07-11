@@ -1092,6 +1092,10 @@ mark {
         display: none;
     }
 
+    .article-item.is-read .article-actions {
+        display: flex;
+    }
+
     .article-list {
         padding: 12px 16px;
     }
