@@ -152,21 +152,33 @@ Rotate the password: edit `APP_PASSWORD` in `/opt/MyFeeds/.env`, then `docker-co
 
 **Firewall / network:** port 80 is public (app reachable anywhere; auth gates it). SSH (22) is public but **key-only** (`PasswordAuthentication no`), so brute-force noise cannot succeed. The `default-allow-rdp` rule was deleted (Linux VM, unused). CPU/egress metrics are hypervisor-level (no in-VM agent).
 
+### Access-log shipping (Cloud Logging)
+
+The web container's access lines are local-only in `docker logs` (json-file, 10 MB × 3 ≈ 2 weeks) — which meant egress incidents older than that were unattributable (e.g. the Jul 5 window was already gone by Jul 20). `/usr/local/bin/access-log-ship.py` + `access-log-ship.timer` fix that: every minute the script pulls new `GET/POST/HEAD` lines via `docker logs --since`, and POSTs them to Cloud Logging (`projects/glossy-reserve-153120/logs/myfeeds-access`) using the VM service account's metadata token — **no Ops Agent** (the 1 GB box has no memory headroom for one; 0 swap) and **no cost** (~14 MB/month vs the 50 GB/month free tier). State (last-shipped epoch) is in `/run` (tmpfs). It ships *only* access lines, not the chatty scheduler/healthcheck noise beyond `/health`.
+
+Query without SSH:
+```bash
+gcloud logging read 'logName="projects/glossy-reserve-153120/logs/myfeeds-access"' \
+  --project=glossy-reserve-153120 --limit=50 --freshness=2h --format='value(timestamp,textPayload)'
+```
+
+Like the other VM-side helpers this is not in the repo; recreate `/usr/local/bin/access-log-ship.py` + `access-log-ship.service`/`.timer` and `systemctl enable --now access-log-ship.timer` after a VM rebuild. `docker logs` local retention is unchanged (json-file driver kept), so the SSH fallback still works.
+
 ### Alert policies (Cloud Monitoring)
 
 Four policies cover CPU and egress in a two-tier layout per metric.
 
 **Sensitive tier:**
 
-- `MyFeeds VM - High CPU Alert (10-min mean >75%)` — 10-min rolling mean of CPU > 75%, no retest. **Expected to fire briefly each Monday** during the Mon 14:00 UTC `apt-daily-upgrade` run; its doc text says so. Investigate only if it fires *outside* the Mon 13:55–14:30 UTC window.
-- `MyFeeds VM - High Network Egress Alert` — 1-hour rolling rate of egress > 2 KiB/s, no retest. **Not tied to maintenance.** Fires on sustained outbound HTTP — historically external scraping of the then-open app. With login auth now in place this should rarely fire; if it does, check `docker logs` access lines for the client IPs and what they pulled. The 1-hour rolling rate lags ~1 hour behind the actual traffic.
+- `MyFeeds VM - High CPU Alert (10-min mean >75%)` — 10-min rolling mean of CPU > 75%, no retest. **Fires on Monday apt mornings but does NOT reflect real in-guest load.** The cpu-forensics TICK log (since 2026-07-07) shows in-guest CPU never exceeds ~16% in these windows — on 2026-07-20 it was ~1% at the moment the alert opened, steal 0%, and there have been **zero** DETAIL (≥70%) blocks in 13 days. The apt CPU cap (30% of one core) is holding; the metric reads high because the shared-core e2-micro `cpu/utilization` normalizes against the fractional baseline vCPU. **This is a hypervisor metric artifact, not app load** — there is no app job at 14:00 UTC (the scheduler is interval-based; `cleanup` runs at :23, `refresh` drifts). Verify any CPU alert against the TICK log before treating it as real.
+- `MyFeeds VM - High Network Egress Alert` — 1-hour rolling rate of egress > 2 KiB/s, no retest. **Not tied to maintenance.** Attribution as of 2026-07-20: egress is dominated by *legitimate authenticated reads* — `GET /` article pages of 20–58 KB pulled by the owner's own IPs (Verizon/Visible mobile + home). Scanner noise is high-count but low-byte (207-byte 404s, 1.7 KB login pages), already neutralized by the login wall + tiny-404 change. Because the bytes are real content (not probe noise), the **threshold stays at 2 KiB/s** — raising it would hide genuine anomalies just to mask the owner's own reading. The 1-hour rolling rate lags ~1 hour behind traffic; a reading session briefly crests 2 KiB/s and auto-closes.
 
 **Always-on safety tier — should never fire during maintenance:**
 
-- `MyFeeds VM - Sustained High CPU` — same metric/aggregation as the sensitive CPU policy, threshold 90%, Warning severity.
+- `MyFeeds VM - Sustained High CPU` — same metric/aggregation as the sensitive CPU policy, threshold 90%, Warning severity. **Caveat:** because it reads the same shared-core metric, this tier has *also* fired on Monday apt windows (e.g. 2026-07-20) despite in-guest CPU ≤16% — so a Monday firing is not automatically a real runaway. Confirm against the TICK log; it is meaningful *off*-Monday or whenever the TICK log actually shows cpu ≥ 70% with a DETAIL block.
 - `MyFeeds VM - Sustained High Egress` — same metric/aggregation as the sensitive egress policy, threshold 10 KiB/s, Warning severity.
 
-Both always-on policies use the same aggregation as their sensitive counterpart (10-min mean for CPU, 1-hour rate for egress) so they are genuinely "two thresholds on the same signal" rather than two adjacent signals. If either fires, treat as a real anomaly — likely a runaway process, scrape, or compromise.
+The egress pair are genuinely "two thresholds on the same signal." The CPU pair share a *metric-artifact-prone* signal on this shared-core VM — treat CPU firings as suspect until the TICK log confirms real in-guest load. A future improvement would be a CPU alert keyed to an in-guest signal (e.g. shipping the TICK values as a custom metric) rather than the hypervisor `cpu/utilization`.
 
 **Note on snoozes:** A recurring weekly snooze would suppress the expected Monday emails entirely, but the Cloud Console UI in this project only supports one-shot snoozes — there is no native recurring/weekly option. Rather than build IaC for what amounts to one expected email per metric per week, the design lives with the weekly fires and uses the doc text to explain them inline. If recurring snoozes ship in the Console, revisit.
 
@@ -174,18 +186,24 @@ All four policies are managed in Cloud Console (Monitoring → Alerting → Poli
 
 ### Investigating a future alert
 
-**A Monday-morning CPU alert (~14:00–14:18 UTC)** is expected apt maintenance — confirm via `apt history.log` and move on.
-
-**Any egress alert, an always-on alert, or a CPU alert outside the Monday window** warrants a look. The access log now shows exactly who is hitting the app:
+**Any CPU alert** — verify against the in-guest TICK log first; on this shared-core VM the CPU metric is artifact-prone (see Alert policies above):
 
 ```bash
-gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 --command="\
-  WEB=\$(sudo docker ps --filter name=myfeeds_myfeeds -q | head -1); \
-  echo '--- top client IPs (last 1h) ---'; sudo docker logs --since 1h \$WEB 2>&1 | grep -oE '^[0-9.]+' | sort | uniq -c | sort -rn | head; \
-  echo '--- recent requests ---'; sudo docker logs --since 1h \$WEB 2>&1 | grep -E '\"(GET|POST)' | tail -30; \
-  echo '--- apt history ---'; sudo zgrep -h '' /var/log/apt/history.log* | tail -20"
+gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 \
+  --command="sudo grep '^TICK' /var/log/cpu-forensics.log | tail -30"
 ```
 
-Pre-auth, egress was anonymous external scraping. Post-auth, sustained egress more likely means heavy legitimate use or a stuck/looping client — the access log's IPs and user-agents will tell you which.
+If the TICK `cpu=` values stay under ~20% during the alert window (and there is no `DETAIL` block), it is the metric artifact — no action. A real runaway shows cpu ≥ 70% and a `DETAIL` block naming the process/cgroup.
+
+**Any egress alert** — the web access log is shipped to Cloud Logging (see *Access-log shipping* below), so attribution no longer needs SSH:
+
+```bash
+gcloud logging read 'logName="projects/glossy-reserve-153120/logs/myfeeds-access"' \
+  --project=glossy-reserve-153120 --limit=200 --freshness=2h \
+  --format='value(textPayload)' | grep -vE '^(127\.0\.0\.1|172\.)' \
+  | awk '{print $1}' | sort | uniq -c | sort -rn | head
+```
+
+The sent-bytes metric lags ~1 hour, so widen `--freshness` to cover the hour *before* the incident opened. Big `GET /` 200s (20–58 KB) to the owner's IPs = legitimate reads (benign); many tiny 404s/302s = neutralized scanner noise. Real content pulled by an *unfamiliar* IP would be the exception worth chasing. Local `docker logs myfeeds_myfeeds_1` remains available over SSH as a fallback (2-week retention).
 
 **Benign one-off: an admin DB/OPML pull.** A single `gcloud compute scp` of the database off the VM (`myfeeds.db` ≈ 6 MB, or a DB + access-log grab ≈ 7–8 MB with SSH overhead) averages to ~2.3 KB/s over the 1-hour rate window — just over the 2 KiB/s sensitive threshold — so it trips `High Network Egress Alert` for exactly one hour and then clears on its own. This is hypervisor-level (SSH/scp) egress, so it will **not** appear in the `docker logs` access lines above — don't waste time hunting for a client IP. Confirmed 2026-07-05 (incident details from the Console): the accidental-deletion recovery scp of the 6 MB DB + 1 MB access log opened an incident at 11:42 UTC that ran 59 min and peaked at 2.24 KiB/s — *just* over the 2 KiB/s line — then auto-closed once the burst aged out of the rolling hour; CPU and the always-on 10 KiB/s tier stayed quiet. **Signature to recognize:** a ~1-hour incident that barely crosses the threshold and then closes on its own is a single one-time transfer aging through the rolling window — not sustained scraping, which runs longer and/or higher. If an egress alert has that shape and lines up with a known admin download, it's this — no action needed.
