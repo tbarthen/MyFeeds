@@ -249,6 +249,13 @@ document.addEventListener("DOMContentLoaded", function() {
     var SWIPE_RESET_MS = 200;
     var SWIPE_RESET_TRANSITION = "transform 0.2s, opacity 0.2s, background 0.2s, box-shadow 0.2s";
 
+    function findTouch(touchList, identifier) {
+        for (var i = 0; i < touchList.length; i++) {
+            if (touchList[i].identifier === identifier) return touchList[i];
+        }
+        return null;
+    }
+
     function clearSwipeStyles(article) {
         article.style.transform = "";
         article.style.opacity = "";
@@ -262,6 +269,7 @@ document.addEventListener("DOMContentLoaded", function() {
         setTimeout(function() {
             if (article.style.transition === SWIPE_RESET_TRANSITION) {
                 article.style.transition = "";
+                article.style.willChange = "";
             }
         }, SWIPE_RESET_MS);
     }
@@ -274,23 +282,30 @@ document.addEventListener("DOMContentLoaded", function() {
         var isSwiping = false;
         var isScrolling = false;
         var thresholdReached = false;
+        var activeTouchId = null;
 
         article.addEventListener("touchstart", function(e) {
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
+            if (isSwiping && findTouch(e.touches, activeTouchId)) return;
+            var touch = e.changedTouches[0];
+            activeTouchId = touch.identifier;
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
             touchCurrentX = touchStartX;
             touchCurrentY = touchStartY;
             isSwiping = true;
             isScrolling = false;
             thresholdReached = false;
             article.style.transition = "none";
+            article.style.willChange = "transform";
             clearSwipeStyles(article);
         }, { passive: true });
 
         article.addEventListener("touchmove", function(e) {
             if (!isSwiping) return;
-            touchCurrentX = e.touches[0].clientX;
-            touchCurrentY = e.touches[0].clientY;
+            var touch = findTouch(e.changedTouches, activeTouchId);
+            if (!touch) return;
+            touchCurrentX = touch.clientX;
+            touchCurrentY = touch.clientY;
             var diffX = touchCurrentX - touchStartX;
             var diffY = touchCurrentY - touchStartY;
             var absDiffX = Math.abs(diffX);
@@ -326,15 +341,18 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         }, { passive: true });
 
-        article.addEventListener("touchcancel", function() {
+        article.addEventListener("touchcancel", function(e) {
+            if (!isSwiping || !findTouch(e.changedTouches, activeTouchId)) return;
             isSwiping = false;
             isScrolling = false;
+            activeTouchId = null;
             animateSwipeReset(article);
         });
 
-        article.addEventListener("touchend", function() {
-            if (!isSwiping) return;
+        article.addEventListener("touchend", function(e) {
+            if (!isSwiping || !findTouch(e.changedTouches, activeTouchId)) return;
             isSwiping = false;
+            activeTouchId = null;
             animateSwipeReset(article);
             if (isScrolling) return;
 

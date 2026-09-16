@@ -85,18 +85,31 @@ document.addEventListener("DOMContentLoaded", function() {
         var timer = null;
         var startX = 0;
         var startY = 0;
+        var pressTouchId = null;
+
+        function trackedTouch(touchList) {
+            for (var i = 0; i < touchList.length; i++) {
+                if (touchList[i].identifier === pressTouchId) return touchList[i];
+            }
+            return null;
+        }
 
         function cancelPress() {
             if (timer) {
                 clearTimeout(timer);
                 timer = null;
             }
+            pressTouchId = null;
             article.classList.remove("long-pressing");
         }
 
         article.addEventListener("touchstart", function(e) {
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
+            if (timer && trackedTouch(e.touches)) return;
+            cancelPress();
+            var touch = e.changedTouches[0];
+            pressTouchId = touch.identifier;
+            startX = touch.clientX;
+            startY = touch.clientY;
             article.classList.add("long-pressing");
             timer = setTimeout(function() {
                 timer = null;
@@ -109,8 +122,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
         article.addEventListener("touchmove", function(e) {
             if (!timer) return;
-            var dx = e.touches[0].clientX - startX;
-            var dy = e.touches[0].clientY - startY;
+            var touch = trackedTouch(e.changedTouches);
+            if (!touch) return;
+            var dx = touch.clientX - startX;
+            var dy = touch.clientY - startY;
             if (Math.sqrt(dx * dx + dy * dy) > MOVE_TOLERANCE) {
                 cancelPress();
             }
