@@ -381,7 +381,8 @@ document.addEventListener("DOMContentLoaded", function() {
                     starBtn.classList.toggle("active");
                     starBtn.textContent = starBtn.classList.contains("active") ? "★" : "☆";
                 }
-                postAction("/articles/" + articleId + "/toggle-save");
+                var saveForm = starBtn ? starBtn.closest("form") : null;
+                postAction(saveForm ? saveForm.action : "/articles/" + articleId + "/save");
             }
         });
     });
