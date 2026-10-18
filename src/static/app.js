@@ -87,17 +87,64 @@ document.addEventListener("DOMContentLoaded", function() {
     var undoDismiss = document.getElementById("undoDismiss");
     var articleList = document.querySelector(".article-list");
 
+    var COLLAPSE_MS = 300;
+    var COLLAPSE_TRANSITION = "transform 0.3s ease-out";
+
+    function hideArticle(articleEl) {
+        if (articleEl) articleEl.classList.add("collapsed");
+    }
+
+    function followingSiblingsNearViewport(articleEl, span) {
+        var limit = window.innerHeight + span;
+        var siblings = [];
+        var el = articleEl.nextElementSibling;
+        while (el) {
+            var top = el.getBoundingClientRect().top;
+            if (top > limit) break;
+            siblings.push({ el: el, top: top });
+            el = el.nextElementSibling;
+        }
+        return siblings;
+    }
+
+    function currentTranslateY(el) {
+        var transform = getComputedStyle(el).transform;
+        return transform && transform !== "none" ? new DOMMatrixReadOnly(transform).m42 : 0;
+    }
+
+    function slideSiblingsIntoPlace(siblings) {
+        var shifts = siblings.map(function(entry) {
+            return entry.top - entry.el.getBoundingClientRect().top + currentTranslateY(entry.el);
+        });
+        var moved = [];
+        siblings.forEach(function(entry, i) {
+            if (!shifts[i]) return;
+            entry.el.style.transition = "none";
+            entry.el.style.transform = "translateY(" + shifts[i] + "px)";
+            moved.push(entry.el);
+        });
+        if (!moved.length) return;
+        moved[0].offsetHeight;
+        moved.forEach(function(el) {
+            el.style.transition = COLLAPSE_TRANSITION;
+            el.style.transform = "";
+        });
+        setTimeout(function() {
+            moved.forEach(function(el) {
+                if (el.style.transition === COLLAPSE_TRANSITION) el.style.transition = "";
+            });
+        }, COLLAPSE_MS);
+    }
+
     function collapseArticle(articleEl) {
-        if (!articleEl) return;
-        articleEl.style.maxHeight = articleEl.offsetHeight + "px";
-        articleEl.offsetHeight; // Force reflow
-        articleEl.classList.add("collapsing");
+        if (!articleEl || articleEl.classList.contains("collapsed")) return;
+        var siblings = followingSiblingsNearViewport(articleEl, articleEl.offsetHeight);
+        hideArticle(articleEl);
+        slideSiblingsIntoPlace(siblings);
     }
 
     function expandArticle(articleEl) {
-        if (!articleEl) return;
-        articleEl.classList.remove("collapsing");
-        articleEl.style.maxHeight = "";
+        if (articleEl) articleEl.classList.remove("collapsed");
     }
 
     function showUndoToast(articleId, feedId, articleEl) {
@@ -246,8 +293,9 @@ document.addEventListener("DOMContentLoaded", function() {
     var SWIPE_SAVE_THRESHOLD = 100;
     var SWIPE_DEAD_ZONE = 30;
     var SWIPE_MAX_VISUAL = 150;
-    var SWIPE_RESET_MS = 200;
-    var SWIPE_RESET_TRANSITION = "transform 0.2s, opacity 0.2s, background 0.2s, box-shadow 0.2s";
+    var SWIPE_FADE_DISTANCE = 200;
+    var SWIPE_GLOW_DISTANCE = 100;
+    var SWIPE_GLOW_MAX = 0.6;
 
     function findTouch(touchList, identifier) {
         for (var i = 0; i < touchList.length; i++) {
@@ -256,133 +304,128 @@ document.addEventListener("DOMContentLoaded", function() {
         return null;
     }
 
-    function clearSwipeStyles(article) {
-        article.style.transform = "";
-        article.style.opacity = "";
-        article.style.background = "";
-        article.style.boxShadow = "";
+    function swipeGlow(article, diffX, dragDistance) {
+        if (diffX >= 0 || article.classList.contains("is-read")) return 0;
+        var progress = Math.min(dragDistance / SWIPE_GLOW_DISTANCE, 1);
+        return (1 - Math.pow(1 - progress, 2)) * SWIPE_GLOW_MAX;
     }
 
-    function animateSwipeReset(article) {
-        article.style.transition = SWIPE_RESET_TRANSITION;
-        clearSwipeStyles(article);
-        setTimeout(function() {
-            if (article.style.transition === SWIPE_RESET_TRANSITION) {
-                article.style.transition = "";
-                article.style.willChange = "";
-            }
-        }, SWIPE_RESET_MS);
+    function setSwipeVisual(article, glowEl, diffX) {
+        var dragDistance = Math.min(Math.abs(diffX), SWIPE_MAX_VISUAL) - SWIPE_DEAD_ZONE;
+        var direction = diffX > 0 ? 1 : -1;
+        article.style.transform = "translateX(" + (dragDistance * direction) + "px)";
+        article.style.opacity = 1 - dragDistance / SWIPE_FADE_DISTANCE;
+        if (glowEl) glowEl.style.opacity = swipeGlow(article, diffX, dragDistance);
+    }
+
+    function clearSwipeVisual(article, glowEl) {
+        article.style.transform = "";
+        article.style.opacity = "";
+        if (glowEl) glowEl.style.opacity = "";
+    }
+
+    function toggleReadBySwipe(article) {
+        var articleId = article.dataset.id;
+        var isRead = article.classList.contains("is-read");
+        if (!isRead) {
+            updateUnreadCount(article.dataset.feedId, -1);
+            markAsReadWithAnimation(article);
+        } else {
+            updateUnreadCount(article.dataset.feedId, 1);
+            article.classList.remove("is-read");
+            syncReadToggleButton(article, false);
+        }
+        postAction("/articles/" + articleId + (isRead ? "/unread" : "/read"));
+    }
+
+    function toggleSaveBySwipe(article) {
+        article.classList.toggle("is-saved");
+        var starBtn = article.querySelector(".btn-star");
+        if (starBtn) {
+            starBtn.classList.toggle("active");
+            starBtn.textContent = starBtn.classList.contains("active") ? "★" : "☆";
+        }
+        var saveForm = starBtn ? starBtn.closest("form") : null;
+        postAction(saveForm ? saveForm.action : "/articles/" + article.dataset.id + "/save");
     }
 
     document.querySelectorAll(".article-item").forEach(function(article) {
+        var glowEl = article.querySelector(".swipe-glow");
         var touchStartX = 0;
         var touchStartY = 0;
         var touchCurrentX = 0;
-        var touchCurrentY = 0;
-        var isSwiping = false;
-        var isScrolling = false;
-        var thresholdReached = false;
         var activeTouchId = null;
+        var isScrolling = false;
+        var isDragging = false;
+        var thresholdReached = false;
+
+        function beginDrag() {
+            isDragging = true;
+            article.style.transition = "";
+            article.classList.add("swiping");
+        }
+
+        function endDrag() {
+            activeTouchId = null;
+            if (!isDragging) return;
+            isDragging = false;
+            article.classList.remove("swiping");
+            clearSwipeVisual(article, glowEl);
+        }
 
         article.addEventListener("touchstart", function(e) {
-            if (isSwiping && findTouch(e.touches, activeTouchId)) return;
+            if (activeTouchId !== null && findTouch(e.touches, activeTouchId)) return;
+            endDrag();
             var touch = e.changedTouches[0];
             activeTouchId = touch.identifier;
             touchStartX = touch.clientX;
             touchStartY = touch.clientY;
             touchCurrentX = touchStartX;
-            touchCurrentY = touchStartY;
-            isSwiping = true;
             isScrolling = false;
             thresholdReached = false;
-            article.style.transition = "none";
-            article.style.willChange = "transform";
-            clearSwipeStyles(article);
         }, { passive: true });
 
         article.addEventListener("touchmove", function(e) {
-            if (!isSwiping) return;
+            if (activeTouchId === null || isScrolling) return;
             var touch = findTouch(e.changedTouches, activeTouchId);
             if (!touch) return;
             touchCurrentX = touch.clientX;
-            touchCurrentY = touch.clientY;
             var diffX = touchCurrentX - touchStartX;
-            var diffY = touchCurrentY - touchStartY;
             var absDiffX = Math.abs(diffX);
-            var absDiffY = Math.abs(diffY);
 
-            if (!isScrolling && absDiffY > absDiffX) {
+            if (!isDragging && Math.abs(touch.clientY - touchStartY) > absDiffX) {
                 isScrolling = true;
-            }
-
-            if (isScrolling || absDiffX <= SWIPE_DEAD_ZONE) {
-                clearSwipeStyles(article);
                 return;
             }
+            if (absDiffX <= SWIPE_DEAD_ZONE) {
+                if (isDragging) clearSwipeVisual(article, glowEl);
+                return;
+            }
+            if (!isDragging) beginDrag();
+            setSwipeVisual(article, glowEl, diffX);
 
-            var clampedDiffX = Math.min(absDiffX, SWIPE_MAX_VISUAL);
-            var visualDiff = (clampedDiffX - SWIPE_DEAD_ZONE) * (diffX > 0 ? 1 : -1);
-            article.style.transform = "translateX(" + visualDiff + "px)";
-            article.style.opacity = 1 - (clampedDiffX - SWIPE_DEAD_ZONE) / 200;
-
-            if (diffX < 0 && !article.classList.contains("is-read")) {
-                var progress = Math.min((clampedDiffX - SWIPE_DEAD_ZONE) / 100, 1);
-                var eased = 1 - Math.pow(1 - progress, 2);
-                article.style.background = "rgba(45, 90, 135, " + (eased * 0.6) + ")";
-                article.style.boxShadow = "0 0 " + (4 + eased * 16) + "px rgba(45, 90, 135, " + (0.15 + eased * 0.45) + ")";
-
-                if (absDiffX > SWIPE_THRESHOLD && !thresholdReached) {
-                    thresholdReached = true;
-                    if (navigator.vibrate) navigator.vibrate(10);
-                }
-            } else {
-                article.style.background = "";
-                article.style.boxShadow = "";
+            if (diffX < 0 && absDiffX > SWIPE_THRESHOLD && !thresholdReached && !article.classList.contains("is-read")) {
+                thresholdReached = true;
+                if (navigator.vibrate) navigator.vibrate(10);
             }
         }, { passive: true });
 
         article.addEventListener("touchcancel", function(e) {
-            if (!isSwiping || !findTouch(e.changedTouches, activeTouchId)) return;
-            isSwiping = false;
-            isScrolling = false;
-            activeTouchId = null;
-            animateSwipeReset(article);
+            if (activeTouchId === null || !findTouch(e.changedTouches, activeTouchId)) return;
+            endDrag();
         });
 
         article.addEventListener("touchend", function(e) {
-            if (!isSwiping || !findTouch(e.changedTouches, activeTouchId)) return;
-            isSwiping = false;
-            activeTouchId = null;
-            animateSwipeReset(article);
-            if (isScrolling) return;
+            if (activeTouchId === null || !findTouch(e.changedTouches, activeTouchId)) return;
+            var completedDrag = isDragging && !isScrolling;
+            endDrag();
+            if (!completedDrag || !article.dataset.id) return;
 
             var diff = touchCurrentX - touchStartX;
-            var articleId = article.dataset.id;
-            if (!articleId) return;
-
             if (diff < -SWIPE_THRESHOLD) {
-                // Swipe left = toggle read/unread
-                var isRead = article.classList.contains("is-read");
-                var endpoint = isRead ? "/articles/" + articleId + "/unread" : "/articles/" + articleId + "/read";
-                if (!isRead) {
-                    updateUnreadCount(article.dataset.feedId, -1);
-                    markAsReadWithAnimation(article);
-                } else {
-                    updateUnreadCount(article.dataset.feedId, 1);
-                    article.classList.remove("is-read");
-                    syncReadToggleButton(article, false);
-                }
-                postAction(endpoint);
+                toggleReadBySwipe(article);
             } else if (diff > SWIPE_SAVE_THRESHOLD) {
-                // Swipe right = add to favorites (optimistic UI)
-                article.classList.toggle("is-saved");
-                var starBtn = article.querySelector(".btn-star");
-                if (starBtn) {
-                    starBtn.classList.toggle("active");
-                    starBtn.textContent = starBtn.classList.contains("active") ? "★" : "☆";
-                }
-                var saveForm = starBtn ? starBtn.closest("form") : null;
-                postAction(saveForm ? saveForm.action : "/articles/" + articleId + "/save");
+                toggleSaveBySwipe(article);
             }
         });
     });
@@ -617,7 +660,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     updateUnreadCount(article.dataset.feedId, -1);
                     article.classList.add("is-read");
                     if (isUnreadView()) {
-                        collapseArticle(article);
+                        hideArticle(article);
                     }
                 });
             });

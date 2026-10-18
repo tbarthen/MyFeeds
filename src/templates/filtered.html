@@ -68,6 +68,7 @@
         <div class="article-list">
             {% for article in articles %}
             <article class="article-item {% if article.is_read %}is-read{% endif %}" data-id="{{ article.id }}">
+                <span class="swipe-glow" aria-hidden="true"></span>
                 <div class="article-content">
                     <div class="article-text">
                         <div class="article-meta">
@@ -84,7 +85,7 @@
                         {% endif %}
                     </div>
                     {% if article.image_url %}
-                    <img class="article-thumbnail" src="{{ article.image_url }}" alt="" loading="lazy">
+                    <img class="article-thumbnail" src="{{ article.image_url }}" alt="" loading="lazy" decoding="async">
                     {% endif %}
                     <button type="button" class="btn-kebab" aria-label="Add to filter" title="Add to filter">&#x22EE;</button>
                 </div>
