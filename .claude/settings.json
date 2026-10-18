@@ -2,11 +2,18 @@
   "permissions": {
     "allow": [
       "Bash(*)",
+      "Bash(gcloud compute ssh myfeeds *)",
       "Read",
       "Write",
       "Edit",
       "WebSearch",
       "WebFetch(*)"
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "gcloud compute ssh to the project VM 'myfeeds' with --tunnel-through-iap running the documented deploy (git pull && docker-compose up -d --build) is approved."
     ]
   }
 }
