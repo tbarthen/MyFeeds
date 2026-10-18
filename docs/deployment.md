@@ -23,6 +23,29 @@ Static files are mounted as a volume, so `git pull` makes them live instantly.
 
 Note: Use `docker-compose` (hyphenated) not `docker compose` on this VM.
 
+## Deploying from a Claude Code cloud session
+
+Cloud sessions cannot open a direct SSH connection to the VM, so the deploy goes
+through an IAP tunnel. The environment holds a GCP network secret for the
+`myfeeds-deploy` service account (roles: Compute Instance Admin v1, Service
+Account User, IAP-secured Tunnel User, and Service Account Token Creator on
+itself). The IAP tunnel needs an explicit access token, minted first:
+
+```bash
+TOKEN=$(curl -sS -X POST -H "Content-Type: application/json" \
+  -d '{"scope":["https://www.googleapis.com/auth/cloud-platform"],"lifetime":"1800s"}' \
+  "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/myfeeds-deploy@glossy-reserve-153120.iam.gserviceaccount.com:generateAccessToken" \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['accessToken'])")
+
+CLOUDSDK_AUTH_ACCESS_TOKEN="$TOKEN" gcloud compute ssh myfeeds --zone=us-central1-a --project=glossy-reserve-153120 --tunnel-through-iap --quiet \
+  --command="sudo bash -c 'cd /opt/MyFeeds && git pull && docker-compose down && docker-compose up -d --build'"
+```
+
+Run the session in the "Accept edits" permission mode so the token and SSH steps
+prompt for approval instead of being auto-denied. Verify with
+`curl -s http://34.61.25.130/health` and by checking that `/static/app.js` serves
+the expected code.
+
 ## Prerequisites
 
 - Changes must be committed and pushed to `master` before deploying
