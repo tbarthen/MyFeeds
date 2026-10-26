@@ -249,6 +249,36 @@ class TestArticleRoutes:
         response = client.post(f"/articles/{article_id}/unread", follow_redirects=True)
         assert response.status_code == 200
 
+    def test_not_junk_exempts_and_redirects(self, client, app, article_id):
+        with app.app_context():
+            from src.app.services import filter_service
+            filter_service.create_filter("Test", r"test", "title")
+
+        response = client.post(f"/articles/{article_id}/not-junk")
+        assert response.status_code == 302
+
+        with app.app_context():
+            db = get_db()
+            row = db.execute("SELECT is_read, is_exempt FROM articles WHERE id = ?", (article_id,)).fetchone()
+            assert row["is_read"] == 0
+            assert row["is_exempt"] == 1
+            assert db.execute("SELECT COUNT(*) as c FROM filter_matches").fetchone()["c"] == 0
+
+    def test_not_junk_ajax(self, client, article_id):
+        response = client.post(f"/articles/{article_id}/not-junk", headers={"X-Requested-With": "XMLHttpRequest"})
+        assert response.status_code == 200
+        assert response.get_json()["success"] is True
+
+    def test_filtered_view_shows_matched_text(self, client, app, article_id):
+        with app.app_context():
+            from src.app.services import filter_service
+            filter_service.create_filter("Test", r"test", "title")
+
+        response = client.get("/filtered")
+        assert response.status_code == 200
+        assert b"<mark>Test</mark>" in response.data
+        assert b"Not junk" in response.data
+
     def test_mark_all_read(self, client, article_id):
         response = client.post("/articles/mark-all-read", follow_redirects=True)
         assert response.status_code == 200

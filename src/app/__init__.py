@@ -1,12 +1,26 @@
 import atexit
 import logging
 import os
+import re
 import sys
 from datetime import timedelta
 
 from flask import Flask, redirect, request, session, url_for
+from markupsafe import Markup, escape
 from werkzeug.exceptions import HTTPException
 from src.app.database import init_db
+
+
+def highlight_match(text: str | None, needle: str | None) -> Markup:
+    """Escape text and wrap case-insensitive occurrences of needle in <mark>."""
+    text = str(text or "")
+    if not needle:
+        return escape(text)
+    pieces = re.split(f"({re.escape(needle)})", text, flags=re.IGNORECASE)
+    return Markup("").join(
+        Markup("<mark>") + escape(piece) + Markup("</mark>") if piece.lower() == needle.lower() else escape(piece)
+        for piece in pieces
+    )
 
 
 AUTH_EXEMPT_PREFIXES = ("/login", "/health", "/static/")
@@ -87,6 +101,7 @@ def create_app(config: dict | None = None) -> Flask:
 
     from src.app import routes
     app.register_blueprint(routes.bp)
+    app.jinja_env.filters["highlight"] = highlight_match
 
     if app.config.get("SCHEDULER_ENABLED") and not app.config.get("TESTING"):
         from src.app.scheduler import init_scheduler, shutdown_scheduler

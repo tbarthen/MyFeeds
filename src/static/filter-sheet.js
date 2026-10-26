@@ -4,59 +4,52 @@ document.addEventListener("DOMContentLoaded", function() {
     if (!overlay || !sheet) return;
 
     var closeBtn = document.getElementById("filterSheetClose");
-    var stepPickFilter = document.getElementById("stepPickFilter");
-    var stepSelectTerm = document.getElementById("stepSelectTerm");
-    var stepTestSave = document.getElementById("stepTestSave");
-    var filterPickList = document.getElementById("filterPickList");
-    var filterPickNewBtn = document.getElementById("filterPickNewBtn");
-    var filterPickNewForm = document.getElementById("filterPickNewForm");
+    var filterSelect = document.getElementById("filterSelect");
+    var filterNewForm = document.getElementById("filterNewForm");
     var newFilterNameInput = document.getElementById("newFilterName");
     var newFilterTarget = document.getElementById("newFilterTarget");
-    var filterPickNewConfirm = document.getElementById("filterPickNewConfirm");
     var termSource = document.getElementById("termSource");
     var termAddBtn = document.getElementById("termAddBtn");
     var termChips = document.getElementById("termChips");
     var termFreeInput = document.getElementById("termFreeInput");
     var wholeWordToggle = document.getElementById("wholeWordToggle");
     var pluralToggle = document.getElementById("pluralToggle");
-    var termBackBtn = document.getElementById("termBackBtn");
-    var termNextBtn = document.getElementById("termNextBtn");
-    var testBackBtn = document.getElementById("testBackBtn");
-    var testSaveBtn = document.getElementById("testSaveBtn");
-    var testRetestBtn = document.getElementById("testRetestBtn");
+    var saveBtn = document.getElementById("testSaveBtn");
     var testResult = document.getElementById("testResult");
+    var testMatchCount = document.getElementById("testMatchCount");
     var testPatternDisplay = document.getElementById("testPatternDisplay");
     var testError = document.getElementById("testError");
-    var sheetFooter = document.getElementById("filterSheetFooter");
-    var dots = overlay.querySelectorAll(".dot");
+
+    var NEW_FILTER_VALUE = "__new__";
+    var LAST_FILTER_KEY = "myfeeds.lastFilterId";
+    var LONG_PRESS_MS = 500;
+    var MOVE_TOLERANCE = 10;
+    var COUNT_DEBOUNCE_MS = 300;
 
     var state = {
-        articleEl: null,
         articleTitle: "",
         articleSummary: "",
         filters: [],
-        selectedFilter: null,
-        isNewFilter: false,
         chips: [],
-        selectedWords: [],
-        currentStep: 0
+        selectedWords: []
     };
 
-    var LONG_PRESS_MS = 500;
-    var MOVE_TOLERANCE = 10;
     var longPressGhost = false;
+
+    // ── Regex helpers ──
+
+    var REGEX_META = /[.*+?^${}()|[\]\\]/;
+    var POSSESSIVE_SUFFIX = /['’]s$/i;
+    var LEADING_PUNCT = /^['"(\[‘“«]+/;
+    var TRAILING_PUNCT = /['"),.;:!?\]’”»]+$/;
 
     function escapeRegex(str) {
         return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     }
 
     function hasRegexMeta(str) {
-        return /[.*+?^${}()|[\]\\]/.test(str);
+        return REGEX_META.test(str);
     }
-
-    var POSSESSIVE_SUFFIX = /['’]s$/i;
-    var LEADING_PUNCT = /^['"(\[‘“«]+/;
-    var TRAILING_PUNCT = /['"),.;:!?\]’”»]+$/;
 
     function cleanSelectedWord(word) {
         return word
@@ -65,21 +58,37 @@ document.addEventListener("DOMContentLoaded", function() {
             .replace(POSSESSIVE_SUFFIX, "");
     }
 
-    function countTerms(pattern) {
-        if (!pattern) return 0;
-        try {
-            return pattern.split("|").filter(function(t) { return t.trim(); }).length;
-        } catch(e) {
-            return 0;
-        }
-    }
-
     function isSimpleSPlural(text) {
         var lastWord = text.split(/\s+/).pop();
         return lastWord.length >= 3 && lastWord.endsWith("s") && !lastWord.endsWith("ss") && !lastWord.endsWith("us");
     }
 
-    // ── Long Press ──
+    function splitTerms(pattern) {
+        return pattern ? pattern.split("|").filter(function(t) { return t.trim(); }) : [];
+    }
+
+    function makeChip(text) {
+        text = text.trim().toLowerCase();
+        return { text: text, isRegex: hasRegexMeta(text) };
+    }
+
+    function chipToTerm(chip) {
+        if (chip.isRegex) return chip.text;
+        var term = escapeRegex(chip.text);
+        if (pluralToggle.checked && isSimpleSPlural(chip.text)) {
+            term = term.slice(0, -1) + "s?";
+        }
+        if (wholeWordToggle.checked) term = "\\b" + term + "\\b";
+        return term;
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement("div");
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    // ── Opening the sheet ──
 
     document.querySelectorAll(".article-item").forEach(function(article) {
         var timer = null;
@@ -126,18 +135,11 @@ document.addEventListener("DOMContentLoaded", function() {
             if (!touch) return;
             var dx = touch.clientX - startX;
             var dy = touch.clientY - startY;
-            if (Math.sqrt(dx * dx + dy * dy) > MOVE_TOLERANCE) {
-                cancelPress();
-            }
+            if (Math.sqrt(dx * dx + dy * dy) > MOVE_TOLERANCE) cancelPress();
         }, { passive: true });
 
-        article.addEventListener("touchend", function() {
-            cancelPress();
-        });
-
-        article.addEventListener("touchcancel", function() {
-            cancelPress();
-        });
+        article.addEventListener("touchend", cancelPress);
+        article.addEventListener("touchcancel", cancelPress);
 
         article.addEventListener("contextmenu", function(e) {
             e.preventDefault();
@@ -153,8 +155,6 @@ document.addEventListener("DOMContentLoaded", function() {
         }, true);
     });
 
-    // ── Kebab Button ──
-
     document.querySelectorAll(".btn-kebab").forEach(function(btn) {
         btn.addEventListener("click", function(e) {
             e.stopPropagation();
@@ -163,135 +163,43 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
-    // ── Sheet Open/Close ──
-
     function openSheet(articleEl) {
-        state.articleEl = articleEl;
         var titleEl = articleEl.querySelector(".article-title");
         var summaryEl = articleEl.querySelector(".article-summary");
         state.articleTitle = titleEl ? (titleEl.textContent || "").trim() : "";
         state.articleSummary = summaryEl ? (summaryEl.textContent || "").trim() : "";
-        state.selectedFilter = null;
-        state.isNewFilter = false;
         state.chips = [];
         state.selectedWords = [];
 
-        showStep(0);
+        termFreeInput.value = "";
+        newFilterNameInput.value = "";
+        wholeWordToggle.checked = false;
+        pluralToggle.checked = false;
+        testError.style.display = "none";
+        saveBtn.textContent = "Save";
+
+        renderTermSource();
+        renderChips();
         loadFilters();
+
         overlay.classList.add("active");
-        requestAnimationFrame(function() {
-            overlay.style.opacity = "1";
-        });
         closeBtn.focus();
     }
 
     function closeSheet() {
         longPressGhost = false;
-        overlay.style.opacity = "0";
-        sheet.style.transform = "";
-        setTimeout(function() {
-            overlay.classList.remove("active");
-            overlay.style.opacity = "";
-            filterPickNewForm.style.display = "none";
-            filterPickNewBtn.style.display = "";
-            wholeWordToggle.checked = false;
-            pluralToggle.checked = false;
-        }, 200);
+        overlay.classList.remove("active");
     }
 
     closeBtn.addEventListener("click", closeSheet);
-
     overlay.addEventListener("click", function(e) {
         if (e.target === overlay) closeSheet();
     });
 
-    // ── Drag to Dismiss ──
-
-    var dragStartY = 0;
-    var isDragging = false;
-    var sheetHandle = sheet.querySelector(".filter-sheet-handle");
-
-    sheetHandle.addEventListener("touchstart", function(e) {
-        dragStartY = e.touches[0].clientY;
-        isDragging = true;
-        sheet.style.transition = "none";
-    }, { passive: true });
-
-    sheetHandle.addEventListener("touchmove", function(e) {
-        if (!isDragging) return;
-        var dy = e.touches[0].clientY - dragStartY;
-        if (dy > 0) {
-            sheet.style.transform = "translateY(" + dy + "px)";
-        }
-    }, { passive: true });
-
-    sheetHandle.addEventListener("touchend", function(e) {
-        if (!isDragging) return;
-        isDragging = false;
-        sheet.style.transition = "";
-        var dy = e.changedTouches[0].clientY - dragStartY;
-        if (dy > sheet.offsetHeight * 0.25) {
-            closeSheet();
-        } else {
-            sheet.style.transform = "";
-        }
-    });
-
-    sheetHandle.addEventListener("mousedown", function(e) {
-        dragStartY = e.clientY;
-        isDragging = true;
-        sheet.style.transition = "none";
-
-        function onMouseMove(e) {
-            if (!isDragging) return;
-            var dy = e.clientY - dragStartY;
-            if (dy > 0) {
-                sheet.style.transform = "translateY(" + dy + "px)";
-            }
-        }
-
-        function onMouseUp(e) {
-            isDragging = false;
-            sheet.style.transition = "";
-            var dy = e.clientY - dragStartY;
-            if (dy > sheet.offsetHeight * 0.25) {
-                closeSheet();
-            } else {
-                sheet.style.transform = "";
-            }
-            document.removeEventListener("mousemove", onMouseMove);
-            document.removeEventListener("mouseup", onMouseUp);
-        }
-
-        document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("mouseup", onMouseUp);
-    });
-
-    // ── Step Navigation ──
-
-    function showStep(n) {
-        state.currentStep = n;
-        stepPickFilter.style.display = n === 0 ? "" : "none";
-        stepSelectTerm.style.display = n === 1 ? "" : "none";
-        stepTestSave.style.display = n === 2 ? "" : "none";
-        dots.forEach(function(d, i) {
-            d.classList.toggle("active", i === n);
-        });
-
-        sheetFooter.style.display = n === 0 ? "none" : "flex";
-        termBackBtn.style.display = n === 1 ? "" : "none";
-        termNextBtn.style.display = n === 1 ? "" : "none";
-        testBackBtn.style.display = n === 2 ? "" : "none";
-        testRetestBtn.style.display = n === 2 ? "" : "none";
-        testSaveBtn.style.display = n === 2 ? "" : "none";
-
-        if (n === 1) renderTermStep();
-        if (n === 2) runTest();
-    }
-
-    // ── Step 1: Pick Filter ──
+    // ── Filter picker ──
 
     function loadFilters() {
+        filterSelect.innerHTML = "";
         fetch("/api/filters")
             .then(function(r) {
                 if (!r.ok) throw new Error("Failed to load filters");
@@ -299,178 +207,151 @@ document.addEventListener("DOMContentLoaded", function() {
             })
             .then(function(filters) {
                 state.filters = filters;
-                renderFilterList(filters);
+                renderFilterSelect(filters);
+                refreshPreview();
             })
             .catch(function() {
-                filterPickList.innerHTML = "";
-                var msg = document.createElement("p");
-                msg.className = "empty-state";
-                msg.textContent = "Could not load filters.";
-                filterPickList.appendChild(msg);
+                state.filters = [];
+                renderFilterSelect([]);
+                showError("Could not load filters.");
             });
     }
 
-    function renderFilterList(filters) {
-        filterPickList.innerHTML = "";
+    function renderFilterSelect(filters) {
+        filterSelect.innerHTML = "";
         filters.forEach(function(f) {
-            var row = document.createElement("div");
-            row.className = "filter-pick-row";
-
-            var nameSpan = document.createElement("span");
-            nameSpan.className = "filter-pick-name";
-            nameSpan.textContent = f.name;
-            row.appendChild(nameSpan);
-
-            var termsSpan = document.createElement("span");
-            termsSpan.className = "filter-pick-terms";
-            termsSpan.textContent = countTerms(f.pattern) + " terms";
-            row.appendChild(termsSpan);
-
-            row.addEventListener("click", function() {
-                state.selectedFilter = f;
-                state.isNewFilter = false;
-                showStep(1);
-            });
-            filterPickList.appendChild(row);
+            var opt = document.createElement("option");
+            opt.value = String(f.id);
+            opt.textContent = f.name + " (" + splitTerms(f.pattern).length + " terms)";
+            filterSelect.appendChild(opt);
         });
+        var newOpt = document.createElement("option");
+        newOpt.value = NEW_FILTER_VALUE;
+        newOpt.textContent = "+ New filter…";
+        filterSelect.appendChild(newOpt);
+
+        var remembered = readLastFilterId();
+        var hasRemembered = filters.some(function(f) { return String(f.id) === remembered; });
+        filterSelect.value = hasRemembered ? remembered : (filters.length ? String(filters[0].id) : NEW_FILTER_VALUE);
+        syncNewFilterForm();
     }
 
-    filterPickNewBtn.addEventListener("click", function() {
-        filterPickNewBtn.style.display = "none";
-        filterPickNewForm.style.display = "";
-        newFilterNameInput.value = "";
-        newFilterNameInput.focus();
-    });
+    function readLastFilterId() {
+        try { return localStorage.getItem(LAST_FILTER_KEY); } catch (e) { return null; }
+    }
 
-    filterPickNewConfirm.addEventListener("click", function() {
-        var name = newFilterNameInput.value.trim();
-        if (!name) {
-            newFilterNameInput.focus();
-            return;
+    function rememberFilterId(id) {
+        try { localStorage.setItem(LAST_FILTER_KEY, String(id)); } catch (e) {}
+    }
+
+    function isNewFilter() {
+        return filterSelect.value === NEW_FILTER_VALUE;
+    }
+
+    function selectedFilter() {
+        var id = filterSelect.value;
+        for (var i = 0; i < state.filters.length; i++) {
+            if (String(state.filters[i].id) === id) return state.filters[i];
         }
-        state.selectedFilter = {
-            id: null,
-            name: name,
-            pattern: "",
-            target: newFilterTarget.value,
-            is_active: true
-        };
-        state.isNewFilter = true;
-        showStep(1);
-    });
-
-    // ── Step 2: Select Terms ──
-
-    function renderTermStep() {
-        state.selectedWords = [];
-        renderTermSource();
-        renderChips();
-        termFreeInput.value = "";
-        updateAddBtn();
+        return null;
     }
+
+    function currentTarget() {
+        var f = selectedFilter();
+        return f ? f.target : newFilterTarget.value;
+    }
+
+    function syncNewFilterForm() {
+        filterNewForm.style.display = isNewFilter() ? "" : "none";
+        if (isNewFilter()) newFilterNameInput.focus();
+    }
+
+    filterSelect.addEventListener("change", function() {
+        syncNewFilterForm();
+        refreshPreview();
+    });
+    newFilterTarget.addEventListener("change", refreshPreview);
+    newFilterNameInput.addEventListener("input", updateSaveState);
+
+    // ── Word selection ──
 
     function renderTermSource() {
         termSource.innerHTML = "";
-
-        if (state.articleTitle) {
-            var titleLabel = document.createElement("span");
-            titleLabel.className = "term-source-label";
-            titleLabel.textContent = "Title";
-            termSource.appendChild(titleLabel);
-            termSource.appendChild(wrapWords(state.articleTitle, "title"));
-        }
-
-        if (state.articleSummary) {
-            var summaryLabel = document.createElement("span");
-            summaryLabel.className = "term-source-label";
-            summaryLabel.textContent = "Summary";
-            termSource.appendChild(summaryLabel);
-            termSource.appendChild(wrapWords(state.articleSummary, "summary"));
-        }
+        appendWordGroup("Title", state.articleTitle, "title");
+        appendWordGroup("Summary", state.articleSummary, "summary");
     }
 
-    function wrapWords(text, group) {
+    function appendWordGroup(labelText, text, group) {
+        if (!text) return;
+        var label = document.createElement("span");
+        label.className = "term-source-label";
+        label.textContent = labelText;
+        termSource.appendChild(label);
+
         var container = document.createElement("div");
         container.className = "term-word-container";
-        var words = text.split(/(\s+)/);
         var wordIndex = 0;
-        words.forEach(function(word) {
-            if (/^\s+$/.test(word)) return;
+        text.split(/\s+/).forEach(function(word) {
+            if (!word) return;
             var btn = document.createElement("button");
             btn.type = "button";
             btn.className = "term-word";
             btn.textContent = word;
             btn.dataset.group = group;
-            btn.dataset.idx = wordIndex;
-            wordIndex++;
-            btn.addEventListener("click", function() {
-                handleWordClick(btn);
-            });
+            btn.dataset.idx = wordIndex++;
+            btn.addEventListener("click", function() { handleWordClick(btn); });
             container.appendChild(btn);
         });
-        return container;
+        termSource.appendChild(container);
     }
 
     function handleWordClick(btn) {
         var group = btn.dataset.group;
-        var idx = parseInt(btn.dataset.idx);
-
+        var idx = parseInt(btn.dataset.idx, 10);
         if (btn.classList.contains("selected")) {
-            deselectWord(btn, group, idx);
+            deselectWord(btn, idx);
         } else {
             selectWord(btn, group, idx);
         }
-        updateAddBtn();
+        termAddBtn.disabled = state.selectedWords.length === 0;
+    }
+
+    function isAdjacentToSelection(group, idx) {
+        var sel = state.selectedWords;
+        if (!sel.length) return false;
+        var first = sel[0];
+        var last = sel[sel.length - 1];
+        return (first.group === group && Math.abs(first.idx - idx) === 1) ||
+               (last.group === group && Math.abs(last.idx - idx) === 1);
     }
 
     function selectWord(btn, group, idx) {
-        var sel = state.selectedWords;
-        if (sel.length > 0) {
-            var lastSel = sel[sel.length - 1];
-            if (lastSel.group === group && Math.abs(lastSel.idx - idx) === 1) {
-                btn.classList.add("selected");
-                sel.push({ el: btn, group: group, idx: idx });
-                sel.sort(function(a, b) { return a.idx - b.idx; });
-                updateConnectedClasses();
-                return;
-            }
-            var firstSel = sel[0];
-            if (firstSel.group === group && Math.abs(firstSel.idx - idx) === 1) {
-                btn.classList.add("selected");
-                sel.push({ el: btn, group: group, idx: idx });
-                sel.sort(function(a, b) { return a.idx - b.idx; });
-                updateConnectedClasses();
-                return;
-            }
-        }
-        clearSelection();
+        if (!isAdjacentToSelection(group, idx)) clearSelection();
         btn.classList.add("selected");
-        state.selectedWords = [{ el: btn, group: group, idx: idx }];
+        state.selectedWords.push({ el: btn, group: group, idx: idx });
+        state.selectedWords.sort(function(a, b) { return a.idx - b.idx; });
         updateConnectedClasses();
     }
 
-    function deselectWord(btn, group, idx) {
+    function deselectWord(btn, idx) {
         var sel = state.selectedWords;
         if (sel.length <= 1) {
             clearSelection();
             return;
         }
-        var first = sel[0];
-        var last = sel[sel.length - 1];
-        if (idx === first.idx || idx === last.idx) {
-            btn.classList.remove("selected");
-            btn.classList.remove("connected-left", "connected-right");
-            state.selectedWords = sel.filter(function(s) { return s.idx !== idx; });
-            updateConnectedClasses();
+        var isEdge = idx === sel[0].idx || idx === sel[sel.length - 1].idx;
+        var keep;
+        if (isEdge) {
+            keep = sel.filter(function(s) { return s.idx !== idx; });
         } else {
-            var beforeSplit = sel.filter(function(s) { return s.idx < idx; });
-            var afterSplit = sel.filter(function(s) { return s.idx > idx; });
-            clearSelection();
-            var keep = beforeSplit.length >= afterSplit.length ? beforeSplit : afterSplit;
-            keep.forEach(function(s) { s.el.classList.add("selected"); });
-            state.selectedWords = keep;
-            updateConnectedClasses();
+            var before = sel.filter(function(s) { return s.idx < idx; });
+            var after = sel.filter(function(s) { return s.idx > idx; });
+            keep = before.length >= after.length ? before : after;
         }
+        clearSelection();
+        keep.forEach(function(s) { s.el.classList.add("selected"); });
+        state.selectedWords = keep;
+        updateConnectedClasses();
     }
 
     function clearSelection() {
@@ -482,11 +363,9 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function updateConnectedClasses() {
         var sel = state.selectedWords;
-        sel.forEach(function(s) {
-            s.el.classList.remove("connected-left", "connected-right");
-        });
-        for (var i = 0; i < sel.length; i++) {
-            if (i > 0 && sel[i].idx === sel[i - 1].idx + 1) {
+        sel.forEach(function(s) { s.el.classList.remove("connected-left", "connected-right"); });
+        for (var i = 1; i < sel.length; i++) {
+            if (sel[i].idx === sel[i - 1].idx + 1) {
                 sel[i].el.classList.add("connected-left");
                 sel[i - 1].el.classList.add("connected-right");
             }
@@ -494,47 +373,42 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function getSelectedPhrase() {
-        if (state.selectedWords.length === 0) return "";
-        var sorted = state.selectedWords.slice().sort(function(a, b) { return a.idx - b.idx; });
-        return sorted
+        return state.selectedWords
             .map(function(s) { return cleanSelectedWord(s.el.textContent); })
             .filter(function(w) { return w; })
             .join(" ");
     }
 
-    function updateAddBtn() {
-        termAddBtn.disabled = state.selectedWords.length === 0;
-    }
-
-    // ── Add Button ──
-
     termAddBtn.addEventListener("click", function() {
         var phrase = getSelectedPhrase();
         if (!phrase) return;
-        commitChip(phrase);
-    });
-
-    function commitChip(text) {
-        text = text.toLowerCase();
-        state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
+        addChip(phrase);
         clearSelection();
-        updateAddBtn();
-        renderChips();
-    }
+        termAddBtn.disabled = true;
+    });
 
     // ── Chips ──
 
-    function chipDisplayText(chip) {
-        if (chip.isRegex) return chip.text;
-        var display = chip.text;
-        if (pluralToggle.checked && isSimpleSPlural(display)) {
-            display = display + "?";
-        }
-        if (wholeWordToggle.checked) {
-            display = "\\b" + display + "\\b";
-        }
-        return display;
+    function addChip(text) {
+        state.chips.push(makeChip(text));
+        renderChips();
+        refreshPreview();
     }
+
+    function flushFreeInput() {
+        var text = termFreeInput.value.trim();
+        if (!text) return;
+        termFreeInput.value = "";
+        addChip(text);
+    }
+
+    termFreeInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            flushFreeInput();
+        }
+    });
+    termFreeInput.addEventListener("input", updateSaveState);
 
     function renderChips() {
         if (termChips.querySelector(".chip-edit-input")) return;
@@ -545,7 +419,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
             var label = document.createElement("span");
             label.className = "chip-label";
-            label.textContent = chipDisplayText(chip);
+            label.textContent = chipToTerm(chip);
             label.addEventListener("click", function(e) {
                 e.stopPropagation();
                 startChipEdit(el, chip, idx);
@@ -555,26 +429,20 @@ document.addEventListener("DOMContentLoaded", function() {
             var remove = document.createElement("button");
             remove.type = "button";
             remove.className = "chip-remove";
-            remove.textContent = "\u00D7";
+            remove.textContent = "×";
             remove.setAttribute("aria-label", "Remove");
             remove.addEventListener("click", function(e) {
                 e.stopPropagation();
                 state.chips.splice(idx, 1);
                 renderChips();
+                refreshPreview();
             });
             el.appendChild(remove);
 
             termChips.appendChild(el);
         });
+        updateSaveState();
     }
-
-    pluralToggle.addEventListener("change", function() {
-        renderChips();
-    });
-
-    wholeWordToggle.addEventListener("change", function() {
-        renderChips();
-    });
 
     function startChipEdit(el, chip, idx) {
         var label = el.querySelector(".chip-label");
@@ -585,7 +453,14 @@ document.addEventListener("DOMContentLoaded", function() {
         input.className = "chip-edit-input";
         input.value = chip.text;
         input.addEventListener("blur", function() {
-            finishChipEdit(chip, idx, input.value);
+            var newText = input.value.trim();
+            if (newText) {
+                state.chips[idx] = makeChip(newText);
+            } else {
+                state.chips.splice(idx, 1);
+            }
+            renderChips();
+            refreshPreview();
         });
         input.addEventListener("keydown", function(e) {
             if (e.key === "Enter") input.blur();
@@ -599,146 +474,88 @@ document.addEventListener("DOMContentLoaded", function() {
         input.select();
     }
 
-    function finishChipEdit(chip, idx, newText) {
-        newText = newText.trim().toLowerCase();
-        if (!newText) {
-            state.chips.splice(idx, 1);
-        } else {
-            chip.text = newText;
-            chip.isRegex = hasRegexMeta(newText);
-        }
-        renderChips();
-    }
+    pluralToggle.addEventListener("change", function() { renderChips(); refreshPreview(); });
+    wholeWordToggle.addEventListener("change", function() { renderChips(); refreshPreview(); });
 
-    termFreeInput.addEventListener("keydown", function(e) {
-        if (e.key === "Enter" && termFreeInput.value.trim()) {
-            var text = termFreeInput.value.trim().toLowerCase();
-            state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
-            termFreeInput.value = "";
-            renderChips();
-        }
-    });
+    // ── Pattern + live preview ──
 
     function buildPattern() {
-        var existingTerms = state.selectedFilter.pattern
-            ? state.selectedFilter.pattern.split("|").filter(function(t) { return t.trim(); })
-            : [];
-
-        var newTerms = [];
-        state.chips.forEach(function(chip) {
-            if (chip.isRegex) {
-                newTerms.push(chip.text);
-            } else if (chip.text.includes("|")) {
-                chip.text.split("|").forEach(function(part) {
-                    var t = escapeRegex(part.trim());
-                    if (wholeWordToggle.checked) t = "\\b" + t + "\\b";
-                    if (t) newTerms.push(t);
-                });
-            } else {
-                var t = escapeRegex(chip.text);
-                if (pluralToggle.checked && isSimpleSPlural(chip.text)) {
-                    t = t.slice(0, -1) + "s?";
-                }
-                if (wholeWordToggle.checked) t = "\\b" + t + "\\b";
-                newTerms.push(t);
-            }
-        });
-
-        var allTerms = existingTerms.concat(newTerms);
-        return allTerms.join("|");
+        var f = selectedFilter();
+        var terms = splitTerms(f ? f.pattern : "");
+        state.chips.forEach(function(chip) { terms.push(chipToTerm(chip)); });
+        return terms.join("|");
     }
 
-    termBackBtn.addEventListener("click", function() {
-        showStep(0);
-    });
-
-    termNextBtn.addEventListener("click", function() {
-        if (state.chips.length === 0 && termFreeInput.value.trim() === "") {
-            termFreeInput.focus();
-            return;
-        }
-        if (termFreeInput.value.trim()) {
-            var text = termFreeInput.value.trim().toLowerCase();
-            state.chips.push({ text: text, isRegex: hasRegexMeta(text) });
-            termFreeInput.value = "";
-            renderChips();
-        }
-        showStep(2);
-    });
-
-    // ── Step 3: Test & Save ──
-
-    function preparePatternForJS(pattern) {
-        var flags = "gi";
-        pattern = pattern.replace(/\(\?i\)/g, "");
-        return { pattern: pattern, flags: flags };
+    function compileForPreview(pattern) {
+        return new RegExp(pattern.replace(/\(\?i\)/g, ""), "gi");
     }
 
-    var matchCountToken = 0;
+    var countTimer = null;
+    var countToken = 0;
 
     function setMatchCount(text, muted) {
-        var el = document.getElementById("testMatchCount");
-        if (!el) return;
-        el.textContent = text;
-        el.classList.toggle("count-muted", !!muted);
+        testMatchCount.textContent = text;
+        testMatchCount.classList.toggle("count-muted", !!muted);
     }
 
-    function fetchMatchCount(pattern) {
-        var target = (state.selectedFilter && state.selectedFilter.target) || "both";
-        var token = ++matchCountToken;
-        setMatchCount("Counting matches\u2026", true);
-
-        fetch("/api/filters/match-count", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pattern: pattern, target: target })
-        }).then(function(r) {
-            if (!r.ok) return r.json().then(function(d) { throw new Error(d.error); });
-            return r.json();
-        }).then(function(data) {
-            if (token !== matchCountToken) return;
-            var n = data.count;
-            var label = n === 1 ? " unread article" : " unread articles";
-            setMatchCount("Would filter " + n + label, n === 0);
-        }).catch(function() {
-            if (token !== matchCountToken) return;
-            setMatchCount("Couldn't count matches", true);
-        });
+    function scheduleMatchCount(pattern) {
+        clearTimeout(countTimer);
+        var token = ++countToken;
+        setMatchCount("Counting matches…", true);
+        countTimer = setTimeout(function() {
+            fetch("/api/filters/match-count", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pattern: pattern, target: currentTarget() })
+            }).then(function(r) {
+                if (!r.ok) return r.json().then(function(d) { throw new Error(d.error); });
+                return r.json();
+            }).then(function(data) {
+                if (token !== countToken) return;
+                var n = data.count;
+                setMatchCount("Would filter " + n + (n === 1 ? " unread article" : " unread articles"), n === 0);
+            }).catch(function() {
+                if (token !== countToken) return;
+                setMatchCount("Couldn't count matches", true);
+            });
+        }, COUNT_DEBOUNCE_MS);
     }
 
-    function runTest() {
+    function refreshPreview() {
         var pattern = buildPattern();
         testPatternDisplay.textContent = pattern;
         testError.style.display = "none";
 
-        var prepared = preparePatternForJS(pattern);
-        try {
-            var regex = new RegExp(prepared.pattern, prepared.flags);
-        } catch(e) {
-            testError.textContent = "Invalid regex: " + e.message;
-            testError.style.display = "";
-            testResult.innerHTML = '<span class="no-match">Cannot test \u2014 fix the pattern</span>';
-            matchCountToken++;
+        if (!pattern) {
+            testResult.innerHTML = '<span class="no-match">Pick words above or type a term</span>';
+            countToken++;
             setMatchCount("", true);
+            updateSaveState();
             return;
         }
 
-        fetchMatchCount(pattern);
-
-        var html = "";
-        html += '<div class="test-section">';
-        html += '<div class="test-section-label">Title</div>';
-        html += '<div>' + highlightMatches(state.articleTitle, regex) + '</div>';
-        html += '</div>';
-
-        if (state.articleSummary) {
-            html += '<div class="test-section">';
-            html += '<div class="test-section-label">Summary</div>';
-            html += '<div>' + highlightMatches(state.articleSummary, regex) + '</div>';
-            html += '</div>';
+        var regex;
+        try {
+            regex = compileForPreview(pattern);
+        } catch (e) {
+            showError("Invalid regex: " + e.message);
+            testResult.innerHTML = '<span class="no-match">Cannot test — fix the pattern</span>';
+            countToken++;
+            setMatchCount("", true);
+            updateSaveState();
+            return;
         }
 
+        var html = '<div class="test-section"><div class="test-section-label">Title</div><div>' +
+            highlightMatches(state.articleTitle, regex) + '</div></div>';
+        if (state.articleSummary) {
+            html += '<div class="test-section"><div class="test-section-label">Summary</div><div>' +
+                highlightMatches(state.articleSummary, regex) + '</div></div>';
+        }
         testResult.innerHTML = html;
+
+        scheduleMatchCount(pattern);
+        updateSaveState();
     }
 
     function highlightMatches(text, regex) {
@@ -750,120 +567,97 @@ document.addEventListener("DOMContentLoaded", function() {
         var hasMatch = false;
 
         while ((match = regex.exec(text)) !== null) {
+            if (match[0] === "") {
+                regex.lastIndex++;
+                continue;
+            }
             hasMatch = true;
             result += escapeHtml(text.slice(lastIndex, match.index));
             result += "<mark>" + escapeHtml(match[0]) + "</mark>";
             lastIndex = regex.lastIndex;
-            if (!regex.global) break;
         }
         result += escapeHtml(text.slice(lastIndex));
 
-        if (!hasMatch) {
-            return '<span class="no-match">' + escapeHtml(text) + ' (no match)</span>';
-        }
+        if (!hasMatch) return '<span class="no-match">' + escapeHtml(text) + ' (no match)</span>';
         return result;
     }
 
-    testBackBtn.addEventListener("click", function() {
-        showStep(1);
-    });
+    function showError(message) {
+        testError.textContent = message;
+        testError.style.display = "";
+    }
 
-    testRetestBtn.addEventListener("click", function() {
-        runTest();
-    });
+    // ── Save ──
 
-    testSaveBtn.addEventListener("click", function() {
+    function hasPendingTerms() {
+        return state.chips.length > 0 || termFreeInput.value.trim() !== "";
+    }
+
+    function updateSaveState() {
+        var ready = hasPendingTerms();
+        if (isNewFilter() && !newFilterNameInput.value.trim()) ready = false;
+        saveBtn.disabled = !ready;
+    }
+
+    function duplicateTerms() {
+        var f = selectedFilter();
+        if (!f) return [];
+        var existing = splitTerms(f.pattern).map(function(t) { return t.trim().toLowerCase(); });
+        return state.chips
+            .filter(function(chip) { return existing.indexOf(chipToTerm(chip).toLowerCase()) !== -1; })
+            .map(function(chip) { return chip.text; });
+    }
+
+    saveBtn.addEventListener("click", function() {
+        flushFreeInput();
+        if (!state.chips.length) return;
+
         var pattern = buildPattern();
-
-        var prepared = preparePatternForJS(pattern);
         try {
-            new RegExp(prepared.pattern, prepared.flags);
-        } catch(e) {
-            testError.textContent = "Invalid regex: " + e.message;
-            testError.style.display = "";
+            compileForPreview(pattern);
+        } catch (e) {
+            showError("Invalid regex: " + e.message);
             return;
         }
 
-        if (checkDuplicateTerms()) return;
+        var dupes = duplicateTerms();
+        if (dupes.length) {
+            showError("Already in this filter: " + dupes.join(", "));
+            return;
+        }
 
-        testSaveBtn.disabled = true;
-        testSaveBtn.textContent = "Saving...";
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving...";
 
-        if (state.isNewFilter) {
-            fetch("/api/filters", {
+        var request;
+        if (isNewFilter()) {
+            request = fetch("/api/filters", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    name: state.selectedFilter.name,
+                    name: newFilterNameInput.value.trim(),
                     pattern: pattern,
-                    target: state.selectedFilter.target
+                    target: newFilterTarget.value
                 })
-            }).then(function(r) {
-                if (!r.ok) return r.json().then(function(d) { throw new Error(d.error); });
-                return r.json();
-            }).then(function(data) {
-                window.location.href = "/filters#filter-" + data.id;
-            }).catch(function(err) {
-                testError.textContent = err.message;
-                testError.style.display = "";
-                testSaveBtn.disabled = false;
-                testSaveBtn.textContent = "Save";
             });
         } else {
-            fetch("/api/filters/" + state.selectedFilter.id, {
+            request = fetch("/api/filters/" + filterSelect.value, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ pattern: pattern })
-            }).then(function(r) {
-                if (!r.ok) return r.json().then(function(d) { throw new Error(d.error); });
-                return r.json();
-            }).then(function(data) {
-                window.location.href = "/filters#filter-" + data.id;
-            }).catch(function(err) {
-                testError.textContent = err.message;
-                testError.style.display = "";
-                testSaveBtn.disabled = false;
-                testSaveBtn.textContent = "Save";
             });
         }
+
+        request.then(function(r) {
+            if (!r.ok) return r.json().then(function(d) { throw new Error(d.error); });
+            return r.json();
+        }).then(function(data) {
+            rememberFilterId(data.id);
+            window.location.href = "/filters#filter-" + data.id;
+        }).catch(function(err) {
+            showError(err.message);
+            saveBtn.disabled = false;
+            saveBtn.textContent = "Save";
+        });
     });
-
-    function checkDuplicateTerms() {
-        if (!state.selectedFilter.pattern || state.isNewFilter) return false;
-
-        var existingTerms = state.selectedFilter.pattern.split("|").map(function(t) {
-            return t.trim().toLowerCase();
-        });
-
-        var dupes = [];
-        state.chips.forEach(function(chip) {
-            var term = chip.isRegex ? chip.text : escapeRegex(chip.text);
-            if (!chip.isRegex) {
-                if (pluralToggle.checked && isSimpleSPlural(chip.text)) {
-                    term = term.slice(0, -1) + "s?";
-                }
-                if (wholeWordToggle.checked) {
-                    term = "\\b" + term + "\\b";
-                }
-            }
-            if (existingTerms.indexOf(term.toLowerCase()) !== -1) {
-                dupes.push(chip.text);
-            }
-        });
-
-        if (dupes.length > 0) {
-            testError.textContent = "Already in this filter: " + dupes.join(", ");
-            testError.style.display = "";
-            return true;
-        }
-        return false;
-    }
-
-    // ── Utilities ──
-
-    function escapeHtml(str) {
-        var div = document.createElement("div");
-        div.appendChild(document.createTextNode(str));
-        return div.innerHTML;
-    }
 });

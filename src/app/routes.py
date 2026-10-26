@@ -169,6 +169,15 @@ def mark_unread(article_id: int):
     return redirect(request.referrer or url_for("main.index"))
 
 
+@bp.route("/articles/<int:article_id>/not-junk", methods=["POST"])
+def not_junk(article_id: int):
+    filter_service.exempt_article(article_id)
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"success": True})
+    return redirect(request.referrer or url_for("main.filtered_view"))
+
+
 @bp.route("/articles/mark-all-read", methods=["POST"])
 def mark_all_read():
     feed_id = request.args.get("feed_id", type=int)

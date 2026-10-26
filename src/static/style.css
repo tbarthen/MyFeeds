@@ -709,6 +709,22 @@ div.nav-row,
     gap: 12px;
 }
 
+.matched-term {
+    display: inline-block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.matched-term mark,
+.article-title mark,
+.article-summary mark {
+    background: rgba(255, 213, 79, 0.45);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
 .inline-form {
     display: inline;
 }
@@ -1198,9 +1214,12 @@ mark {
     color: var(--text-color);
 }
 
-@media (max-width: 768px) {
+@media (any-pointer: coarse), (max-width: 768px) {
     .btn-kebab {
         opacity: 1;
+        min-width: 44px;
+        min-height: 44px;
+        touch-action: manipulation;
     }
 }
 
@@ -1267,16 +1286,12 @@ mark {
 
 .filter-sheet-overlay.active .filter-sheet {
     transform: translateY(0);
+    animation: filter-sheet-in 0.25s ease;
 }
 
-.filter-sheet-handle {
-    width: 36px;
-    height: 4px;
-    background: var(--border-color);
-    border-radius: 2px;
-    margin: 8px auto;
-    flex-shrink: 0;
-    cursor: grab;
+@keyframes filter-sheet-in {
+    from { transform: translateY(24px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
 }
 
 .filter-sheet-header {
@@ -1307,25 +1322,48 @@ mark {
     color: var(--text-color);
 }
 
-/* Step Dots */
-.filter-sheet-dots {
+/* Filter picker */
+.filter-select-row {
     display: flex;
-    justify-content: center;
-    gap: 6px;
-    padding: 4px 0 12px;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 10px;
+}
+
+.filter-select-row label {
+    font-size: 13px;
+    color: var(--text-muted);
     flex-shrink: 0;
 }
 
-.filter-sheet-dots .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--border-color);
-    transition: background 0.2s;
+.filter-select-row select,
+.filter-new-form select,
+.filter-new-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 16px;
+    background: var(--bg-color);
+    color: var(--text-color);
 }
 
-.filter-sheet-dots .dot.active {
-    background: var(--accent-color);
+.filter-select-row select:focus,
+.filter-new-form select:focus,
+.filter-new-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.filter-new-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.filter-new-form .filter-new-input {
+    flex: 2;
 }
 
 /* Sheet Body */
@@ -1338,8 +1376,8 @@ mark {
 
 /* Sheet Footer (sticky action buttons) */
 .filter-sheet-footer {
-    display: none;
-    justify-content: space-between;
+    display: flex;
+    justify-content: flex-end;
     padding: 12px 16px;
     border-top: 1px solid var(--border-color);
     flex-shrink: 0;
@@ -1354,79 +1392,7 @@ mark {
     font-size: 14px;
 }
 
-/* Step 1: Pick Filter */
-.filter-pick-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.filter-pick-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.filter-pick-row:hover {
-    background: var(--hover-bg);
-}
-
-.filter-pick-row .filter-pick-name {
-    font-size: 14px;
-    font-weight: 500;
-}
-
-.filter-pick-row .filter-pick-terms {
-    font-size: 12px;
-    color: var(--text-muted);
-}
-
-.filter-pick-new {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-light);
-}
-
-.filter-pick-new-btn {
-    background: none;
-    border: 1px dashed var(--border-color);
-    color: var(--accent-color);
-    width: 100%;
-    padding: 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-}
-
-.filter-pick-new-btn:hover {
-    background: var(--hover-bg);
-}
-
-.filter-pick-new-form {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.filter-pick-new-input {
-    padding: 8px 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    font-size: 16px;
-    background: var(--bg-color);
-    color: var(--text-color);
-}
-
-.filter-pick-new-input:focus {
-    outline: none;
-    border-color: var(--accent-color);
-}
-
-/* Step 2: Select Terms */
+/* Term selection */
 .term-source {
     background: var(--bg-color);
     border: 1px solid var(--border-color);
@@ -1607,7 +1573,7 @@ mark {
     margin-bottom: 12px;
 }
 
-/* Step 3: Test & Save */
+/* Live preview */
 .test-preview {
     position: relative;
     border: 2px dashed var(--border-color);
@@ -1743,10 +1709,6 @@ mark {
         min-height: 48px;
     }
 
-    .filter-sheet-handle {
-        display: none;
-    }
-
     .filter-sheet-footer {
         position: sticky;
         bottom: 0;
@@ -1760,28 +1722,14 @@ mark {
         padding: 8px 24px;
     }
 
-    .filter-pick-row {
-        min-height: 48px;
-        padding: 12px 16px;
-    }
-
-    .filter-pick-list {
-        gap: 8px;
-    }
-
-    .filter-pick-new-btn {
+    .filter-select-row select,
+    .filter-new-form select,
+    .filter-new-input {
         min-height: 48px;
     }
 
-    .filter-pick-new-input,
-    .filter-pick-new-form select {
-        min-height: 48px;
-        font-size: 16px;
-    }
-
-    .filter-pick-new-form .btn-small {
-        min-height: 48px;
-        font-size: 14px;
+    .filter-new-form {
+        flex-direction: column;
     }
 
     .term-word {

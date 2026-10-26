@@ -7,6 +7,11 @@ SQLITE_VAR_LIMIT = 999
 
 FILTER_UPDATABLE_COLUMNS = {"name", "pattern", "target", "is_active"}
 
+HTML_TAG = re.compile(r"<[^>]+>")
+WHITESPACE = re.compile(r"\s+")
+
+MatchRow = tuple[int, int, str]
+
 
 def _chunked_update_is_read(db, article_ids: list[int]) -> None:
     for i in range(0, len(article_ids), SQLITE_VAR_LIMIT):
@@ -16,6 +21,19 @@ def _chunked_update_is_read(db, article_ids: list[int]) -> None:
             "UPDATE articles SET is_read = 1 WHERE id IN ({})".format(placeholders),
             chunk
         )
+
+
+def _record_matches(db, match_rows: list[MatchRow], article_ids_to_read: list[int]) -> None:
+    """Persist (article_id, filter_id, matched_text) rows and mark the articles read."""
+    if match_rows:
+        db.executemany(
+            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id, matched_text) VALUES (?, ?, ?)",
+            match_rows
+        )
+    if article_ids_to_read:
+        _chunked_update_is_read(db, article_ids_to_read)
+    if match_rows or article_ids_to_read:
+        db.commit()
 
 
 def get_all_filters() -> list[Filter]:
@@ -145,44 +163,38 @@ def apply_filter_to_existing_articles(filter_obj: Filter) -> int:
     rows = db.execute("""
         SELECT a.id, a.title, a.summary, a.is_read
         FROM articles a
-        WHERE a.is_saved = 0
+        WHERE a.is_saved = 0 AND a.is_exempt = 0
           AND a.id NOT IN (
               SELECT article_id FROM filter_matches WHERE filter_id = ?
           )
     """, (filter_obj.id,)).fetchall()
 
-    match_ids = []
+    match_rows = []
     unread_matched_ids = []
     compiled = re.compile(filter_obj.pattern, re.IGNORECASE)
 
     for row in rows:
-        if article_matches_filter(row["title"], row["summary"], compiled, filter_obj.target):
-            match_ids.append(row["id"])
+        matched = find_match_text(row["title"], row["summary"], compiled, filter_obj.target)
+        if matched is not None:
+            match_rows.append((row["id"], filter_obj.id, matched))
             if not row["is_read"]:
                 unread_matched_ids.append(row["id"])
 
-    if match_ids:
-        db.executemany(
-            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
-            [(aid, filter_obj.id) for aid in match_ids]
-        )
-        if unread_matched_ids:
-            _chunked_update_is_read(db, unread_matched_ids)
-        db.commit()
+    _record_matches(db, match_rows, unread_matched_ids)
 
-    return len(match_ids)
+    return len(match_rows)
 
 
 def count_unread_matches(pattern: str, target: str) -> int:
     """Count unread, unsaved articles a pattern would catch if added as a filter.
 
     Mirrors what apply_filter_to_existing_articles moves to the Filtered view on
-    add: saved articles are exempt, and already-filtered articles are read so
-    they're excluded here. Assumes pattern is a valid regex.
+    add: saved and exempt articles are exempt, and already-filtered articles are
+    read so they're excluded here. Assumes pattern is a valid regex.
     """
     db = get_db()
     rows = db.execute(
-        "SELECT title, summary FROM articles WHERE is_saved = 0 AND is_read = 0"
+        "SELECT title, summary FROM articles WHERE is_saved = 0 AND is_exempt = 0 AND is_read = 0"
     ).fetchall()
 
     compiled = re.compile(pattern, re.IGNORECASE)
@@ -197,7 +209,7 @@ def reapply_all_filters() -> int:
 
     remarked = db.execute("""
         UPDATE articles SET is_read = 1
-        WHERE is_read = 0 AND is_saved = 0
+        WHERE is_read = 0 AND is_saved = 0 AND is_exempt = 0
           AND id IN (SELECT article_id FROM filter_matches)
     """)
     db.commit()
@@ -214,7 +226,7 @@ def reapply_all_filters() -> int:
     rows = db.execute("""
         SELECT a.id, a.title, a.summary, a.is_read
         FROM articles a
-        WHERE a.is_saved = 0
+        WHERE a.is_saved = 0 AND a.is_exempt = 0
     """).fetchall()
 
     new_match_rows = []
@@ -224,30 +236,59 @@ def reapply_all_filters() -> int:
         for f, compiled in compiled_filters:
             if (row["id"], f.id) in existing_matches:
                 continue
-            if article_matches_filter(row["title"], row["summary"], compiled, f.target):
-                new_match_rows.append((row["id"], f.id))
+            matched = find_match_text(row["title"], row["summary"], compiled, f.target)
+            if matched is not None:
+                new_match_rows.append((row["id"], f.id, matched))
                 if not row["is_read"]:
                     unread_matched_ids.add(row["id"])
 
-    if new_match_rows:
-        db.executemany(
-            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
-            new_match_rows
-        )
-
-    if unread_matched_ids:
-        _chunked_update_is_read(db, list(unread_matched_ids))
-
-    if new_match_rows or unread_matched_ids:
-        db.commit()
+    _record_matches(db, new_match_rows, list(unread_matched_ids))
+    _backfill_matched_text(db, compiled_filters)
 
     return remarked_count + len(new_match_rows)
+
+
+def _backfill_matched_text(db, compiled_filters: list[tuple[Filter, re.Pattern]]) -> None:
+    """Fill matched_text for matches recorded before it was tracked."""
+    by_filter_id = {f.id: (f, compiled) for f, compiled in compiled_filters}
+    rows = db.execute("""
+        SELECT fm.id, fm.filter_id, a.title, a.summary
+        FROM filter_matches fm JOIN articles a ON a.id = fm.article_id
+        WHERE fm.matched_text IS NULL
+    """).fetchall()
+
+    updates = []
+    for row in rows:
+        entry = by_filter_id.get(row["filter_id"])
+        if entry is None:
+            continue
+        f, compiled = entry
+        matched = find_match_text(row["title"], row["summary"], compiled, f.target)
+        if matched is not None:
+            updates.append((matched, row["id"]))
+
+    if updates:
+        db.executemany("UPDATE filter_matches SET matched_text = ? WHERE id = ?", updates)
+        db.commit()
 
 
 def clear_filter_matches(filter_id: int) -> None:
     db = get_db()
     db.execute("DELETE FROM filter_matches WHERE filter_id = ?", (filter_id,))
     db.commit()
+
+
+def exempt_article(article_id: int) -> bool:
+    """Rescue a false positive: drop its matches, mark unread, never filter it again."""
+    db = get_db()
+    cursor = db.execute(
+        "UPDATE articles SET is_exempt = 1, is_read = 0 WHERE id = ?", (article_id,)
+    )
+    if cursor.rowcount == 0:
+        return False
+    db.execute("DELETE FROM filter_matches WHERE article_id = ?", (article_id,))
+    db.commit()
+    return True
 
 
 def get_compiled_active_filters() -> list[tuple[Filter, re.Pattern]]:
@@ -276,17 +317,12 @@ def apply_filters_to_articles(
 
     for article_id, title, summary in articles:
         for f, compiled in compiled_filters:
-            if article_matches_filter(title, summary, compiled, f.target):
-                match_rows.append((article_id, f.id))
+            matched = find_match_text(title, summary, compiled, f.target)
+            if matched is not None:
+                match_rows.append((article_id, f.id, matched))
                 matched_article_ids.add(article_id)
 
-    if match_rows:
-        db.executemany(
-            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
-            match_rows
-        )
-        _chunked_update_is_read(db, list(matched_article_ids))
-        db.commit()
+    _record_matches(db, match_rows, list(matched_article_ids))
 
     return len(matched_article_ids)
 
@@ -296,22 +332,43 @@ def apply_filters_to_article(article_id: int, title: str | None, summary: str | 
     if compiled_filters is None:
         compiled_filters = get_compiled_active_filters()
 
-    matched_filter_ids = []
-
+    match_rows = []
     for f, compiled in compiled_filters:
-        if article_matches_filter(title, summary, compiled, f.target):
-            matched_filter_ids.append(f.id)
+        matched = find_match_text(title, summary, compiled, f.target)
+        if matched is not None:
+            match_rows.append((article_id, f.id, matched))
 
-    if matched_filter_ids:
-        db = get_db()
-        db.executemany(
-            "INSERT OR IGNORE INTO filter_matches (article_id, filter_id) VALUES (?, ?)",
-            [(article_id, fid) for fid in matched_filter_ids]
-        )
-        db.execute("UPDATE articles SET is_read = 1 WHERE id = ?", (article_id,))
-        db.commit()
+    if match_rows:
+        _record_matches(get_db(), match_rows, [article_id])
 
-    return matched_filter_ids
+    return [filter_id for _, filter_id, _ in match_rows]
+
+
+def strip_html(text: str | None) -> str:
+    """Reduce HTML to its visible text so patterns never match tags, URLs or attributes."""
+    if not text:
+        return ""
+    return WHITESPACE.sub(" ", HTML_TAG.sub(" ", text)).strip()
+
+
+def find_match_text(
+    title: str | None,
+    summary: str | None,
+    compiled_pattern: re.Pattern,
+    target: str
+) -> str | None:
+    """Return the text the pattern matched in the targeted fields, or None."""
+    fields = []
+    if target in ("title", "both"):
+        fields.append(title or "")
+    if target in ("summary", "both"):
+        fields.append(strip_html(summary))
+
+    for text in fields:
+        match = compiled_pattern.search(text)
+        if match:
+            return match.group(0)
+    return None
 
 
 def article_matches_filter(
@@ -320,16 +377,7 @@ def article_matches_filter(
     compiled_pattern: re.Pattern,
     target: str
 ) -> bool:
-    title = title or ""
-    summary = summary or ""
-
-    if target == "title":
-        return bool(compiled_pattern.search(title))
-    elif target == "summary":
-        return bool(compiled_pattern.search(summary))
-    else:
-        return bool(compiled_pattern.search(title) or compiled_pattern.search(summary))
-
+    return find_match_text(title, summary, compiled_pattern, target) is not None
 
 
 def get_filtered_articles_by_rule() -> list[tuple[Filter, list[Article]]]:
@@ -339,11 +387,11 @@ def get_filtered_articles_by_rule() -> list[tuple[Filter, list[Article]]]:
 
     for f in filters:
         rows = db.execute("""
-            SELECT a.*, feeds.title as feed_title
+            SELECT a.*, feeds.title as feed_title, fm.matched_text
             FROM articles a
             JOIN filter_matches fm ON a.id = fm.article_id
             JOIN feeds ON a.feed_id = feeds.id
-            WHERE fm.filter_id = ?
+            WHERE fm.filter_id = ? AND feeds.hidden = 0
             ORDER BY a.published_at DESC
         """, (f.id,)).fetchall()
 

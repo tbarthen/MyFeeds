@@ -404,3 +404,115 @@ class TestCountUnreadMatches:
             db.commit()
 
             assert filter_service.count_unread_matches("python", "both") == 0
+
+
+class TestMatchedText:
+    def test_match_records_matched_text(self, app, sample_articles):
+        with app.app_context():
+            f, _ = filter_service.create_filter("Python", r"pyth\w+", "title")
+
+            db = get_db()
+            rows = db.execute(
+                "SELECT matched_text FROM filter_matches WHERE filter_id = ? ORDER BY article_id",
+                (f.id,)
+            ).fetchall()
+            assert [r["matched_text"] for r in rows] == ["Python", "Python"]
+
+    def test_filtered_view_exposes_matched_text(self, app, sample_articles):
+        with app.app_context():
+            filter_service.create_filter("Sports", r"football", "both")
+
+            grouped = filter_service.get_filtered_articles_by_rule()
+            assert len(grouped) == 1
+            _, articles = grouped[0]
+            assert articles[0].matched_text == "Football"
+
+    def test_reapply_backfills_missing_matched_text(self, app, sample_articles):
+        with app.app_context():
+            f, _ = filter_service.create_filter("Python", r"python", "both")
+            db = get_db()
+            db.execute("UPDATE filter_matches SET matched_text = NULL")
+            db.commit()
+
+            filter_service.reapply_all_filters()
+
+            missing = db.execute(
+                "SELECT COUNT(*) as count FROM filter_matches WHERE matched_text IS NULL"
+            ).fetchone()
+            assert missing["count"] == 0
+
+
+class TestStripHtml:
+    def test_summary_match_ignores_tags_and_attributes(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            db.execute("""
+                INSERT INTO articles (feed_id, guid, title, summary, is_read, is_saved)
+                VALUES (?, 'html-guid', 'Plain title', '<a class="nas" href="https://steam.example">Nothing here</a>', 0, 0)
+            """, (sample_feed,))
+            db.commit()
+
+            f, _ = filter_service.create_filter("Hardware", r"\b(nas|steam)\b", "summary")
+            assert filter_service.get_filter_match_count(f.id) == 0
+
+    def test_summary_match_sees_visible_text(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            db.execute("""
+                INSERT INTO articles (feed_id, guid, title, summary, is_read, is_saved)
+                VALUES (?, 'html-guid', 'Plain title', '<p>Build a<br>NAS today</p>', 0, 0)
+            """, (sample_feed,))
+            db.commit()
+
+            f, _ = filter_service.create_filter("Hardware", r"\bnas\b", "summary")
+            assert filter_service.get_filter_match_count(f.id) == 1
+
+    def test_strip_html_collapses_whitespace(self):
+        assert filter_service.strip_html("<p>a</p>\n\n<p>b</p>") == "a b"
+        assert filter_service.strip_html(None) == ""
+
+
+class TestExemptArticle:
+    def test_exempt_removes_matches_and_marks_unread(self, app, sample_articles):
+        with app.app_context():
+            filter_service.create_filter("Python", r"python", "both")
+            article_id = sample_articles[0]
+
+            assert filter_service.exempt_article(article_id) is True
+
+            db = get_db()
+            article = db.execute(
+                "SELECT is_read, is_exempt FROM articles WHERE id = ?", (article_id,)
+            ).fetchone()
+            assert article["is_read"] == 0
+            assert article["is_exempt"] == 1
+            matches = db.execute(
+                "SELECT COUNT(*) as count FROM filter_matches WHERE article_id = ?", (article_id,)
+            ).fetchone()
+            assert matches["count"] == 0
+
+    def test_exempt_survives_reapply(self, app, sample_articles):
+        with app.app_context():
+            filter_service.create_filter("Python", r"python", "both")
+            article_id = sample_articles[0]
+            filter_service.exempt_article(article_id)
+
+            filter_service.reapply_all_filters()
+
+            db = get_db()
+            article = db.execute("SELECT is_read FROM articles WHERE id = ?", (article_id,)).fetchone()
+            assert article["is_read"] == 0
+
+    def test_exempt_survives_new_filter(self, app, sample_articles):
+        with app.app_context():
+            article_id = sample_articles[0]
+            filter_service.exempt_article(article_id)
+
+            f, _ = filter_service.create_filter("Python", r"python", "both")
+
+            assert filter_service.get_filter_match_count(f.id) == 1
+            assert filter_service.count_unread_matches(r"python", "both") == 0
+
+    def test_exempt_unknown_article(self, app):
+        with app.app_context():
+            assert filter_service.exempt_article(9999) is False

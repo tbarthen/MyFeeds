@@ -78,27 +78,23 @@
                             <span class="article-source">{{ article.feed_title }}</span>
                         </div>
                         <h4 class="article-title">
-                            <a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a>
+                            <a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title|highlight(article.matched_text) }}</a>
                         </h4>
                         {% if article.summary %}
-                        <p class="article-summary">{{ article.summary|striptags|truncate(200) }}</p>
+                        <p class="article-summary">{{ article.summary|striptags|truncate(200)|highlight(article.matched_text) }}</p>
+                        {% endif %}
+                        {% if article.matched_text %}
+                        <span class="matched-term" title="Text that matched">Caught by <mark>{{ article.matched_text }}</mark></span>
                         {% endif %}
                     </div>
                     {% if article.image_url %}
                     <img class="article-thumbnail" src="{{ article.image_url }}" alt="" loading="lazy" decoding="async">
                     {% endif %}
-                    <button type="button" class="btn-kebab" aria-label="Add to filter" title="Add to filter">&#x22EE;</button>
                 </div>
                 <div class="article-actions">
-                    {% if article.is_read %}
-                    <form action="{{ url_for('main.mark_unread', article_id=article.id) }}" method="post" class="inline-form">
-                        <button type="submit" class="btn-small">Mark Unread</button>
+                    <form action="{{ url_for('main.not_junk', article_id=article.id) }}" method="post" class="inline-form">
+                        <button type="submit" class="btn-small" title="Mark unread and never filter this article again">Not junk</button>
                     </form>
-                    {% else %}
-                    <form action="{{ url_for('main.mark_read', article_id=article.id) }}" method="post" class="inline-form">
-                        <button type="submit" class="btn-small">Mark Read</button>
-                    </form>
-                    {% endif %}
                 </div>
             </article>
             {% endfor %}

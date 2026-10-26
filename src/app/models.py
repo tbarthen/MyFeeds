@@ -60,11 +60,14 @@ class Article:
     published_at: datetime | None = None
     is_read: bool = False
     is_saved: bool = False
+    is_exempt: bool = False
     created_at: datetime | None = None
     feed_title: str | None = None
+    matched_text: str | None = None
 
     @classmethod
     def from_row(cls, row) -> "Article":
+        keys = row.keys()
         return cls(
             id=row["id"],
             feed_id=row["feed_id"],
@@ -73,12 +76,14 @@ class Article:
             summary=row["summary"],
             content=row["content"],
             url=row["url"],
-            image_url=row["image_url"] if "image_url" in row.keys() else None,
+            image_url=row["image_url"] if "image_url" in keys else None,
             published_at=parse_datetime(row["published_at"]),
             is_read=bool(row["is_read"]),
             is_saved=bool(row["is_saved"]),
+            is_exempt=bool(row["is_exempt"]) if "is_exempt" in keys else False,
             created_at=parse_datetime(row["created_at"]),
-            feed_title=row["feed_title"] if "feed_title" in row.keys() else None
+            feed_title=row["feed_title"] if "feed_title" in keys else None,
+            matched_text=row["matched_text"] if "matched_text" in keys else None
         )
 
 
