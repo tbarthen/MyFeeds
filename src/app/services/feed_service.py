@@ -107,6 +107,72 @@ def add_feed(url: str) -> Tuple[Feed | None, str | None]:
     return get_feed_by_id(feed_id), None
 
 
+def get_keep_pattern_feeds() -> list[Feed]:
+    """Active feeds that only keep entries matching their own pattern."""
+    db = get_db()
+    rows = db.execute("""
+        SELECT f.*, 0 as unread_count
+        FROM feeds f
+        WHERE f.unsubscribed = 0 AND f.keep_pattern IS NOT NULL
+        ORDER BY f.title COLLATE NOCASE
+    """).fetchall()
+    return [Feed.from_row(row) for row in rows]
+
+
+def set_feed_keep_pattern(feed_id: int, pattern: str | None) -> Tuple[int, str | None]:
+    """Set (or clear, with an empty pattern) the regex a feed's entries must match to be kept.
+
+    Unsaved articles already in the feed that don't match are removed.
+    Returns (removed_count, error).
+    """
+    from src.app.services import filter_service
+
+    pattern = (pattern or "").strip() or None
+    if pattern is not None and not filter_service.is_valid_regex(pattern):
+        return 0, "Invalid regex pattern"
+
+    db = get_db()
+    cursor = db.execute(
+        "UPDATE feeds SET keep_pattern = ? WHERE id = ? AND url != ?",
+        (pattern, feed_id, UNSUBSCRIBED_FEED_URL)
+    )
+    db.commit()
+    if cursor.rowcount == 0:
+        return 0, "Feed not found"
+
+    if pattern is None:
+        return 0, None
+    return _remove_unkept_articles(db, feed_id, pattern), None
+
+
+def _remove_unkept_articles(db: sqlite3.Connection, feed_id: int, pattern: str) -> int:
+    from src.app.services import filter_service
+
+    compiled = re.compile(pattern, re.IGNORECASE)
+    rows = db.execute(
+        "SELECT id, title, summary FROM articles WHERE feed_id = ? AND is_saved = 0",
+        (feed_id,)
+    ).fetchall()
+    unkept_ids = [
+        (row["id"],) for row in rows
+        if not filter_service.article_matches_filter(row["title"], row["summary"], compiled, "both")
+    ]
+    if unkept_ids:
+        db.executemany("DELETE FROM articles WHERE id = ?", unkept_ids)
+        db.commit()
+    return len(unkept_ids)
+
+
+def _get_compiled_keep_pattern(db: sqlite3.Connection, feed_id: int) -> re.Pattern | None:
+    row = db.execute("SELECT keep_pattern FROM feeds WHERE id = ?", (feed_id,)).fetchone()
+    if not row or not row["keep_pattern"]:
+        return None
+    try:
+        return re.compile(row["keep_pattern"], re.IGNORECASE)
+    except re.error:
+        return None
+
+
 def set_feed_hidden(feed_id: int, hidden: bool) -> bool:
     db = get_db()
     cursor = db.execute(
@@ -393,6 +459,7 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict,
     new_count = 0
     compiled_filters = filter_service.get_compiled_active_filters()
     cutoff = datetime.now(timezone.utc) - timedelta(days=article_service.RETENTION_DAYS)
+    keep_pattern = _get_compiled_keep_pattern(db, feed_id)
 
     new_articles = []
 
@@ -412,6 +479,9 @@ def save_articles_from_parsed(feed_id: int, parsed: feedparser.FeedParserDict,
 
         title = html.unescape(entry.get("title", ""))
         summary = html.unescape(entry.get("summary", ""))
+        if keep_pattern is not None and not filter_service.article_matches_filter(
+                title, summary, keep_pattern, "both"):
+            continue
         content = ""
         if entry.get("content"):
             content = entry.content[0].get("value", "")

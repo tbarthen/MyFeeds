@@ -133,6 +133,24 @@ def toggle_feed_hidden(feed_id: int):
     return redirect(request.referrer or url_for("main.index"))
 
 
+@bp.route("/feeds/keep-pattern", methods=["POST"])
+def set_feed_keep_pattern():
+    try:
+        feed_id = int(request.form.get("feed_id", ""))
+    except ValueError:
+        flash("Pick a feed", "error")
+        return redirect(url_for("main.settings_page"))
+
+    removed, error = feed_service.set_feed_keep_pattern(feed_id, request.form.get("pattern"))
+    if error:
+        flash(error, "error")
+    elif request.form.get("pattern", "").strip():
+        flash(f"Keep-only pattern saved; removed {removed} non-matching article(s)", "success")
+    else:
+        flash("Keep-only pattern cleared", "success")
+    return redirect(url_for("main.settings_page"))
+
+
 @bp.route("/feeds/<int:feed_id>/refresh", methods=["POST"])
 def refresh_feed(feed_id: int):
     feed_service.refresh_feed(feed_id)
@@ -447,8 +465,13 @@ def settings_page():
     saved_count = article_service.get_saved_count()
     filtered_count = filter_service.get_total_filtered_count()
     unsubscribed_feeds = feed_service.get_unsubscribed_feeds()
+    active_feeds = [f for f in feed_service.get_all_feeds()
+                    if f.url != feed_service.UNSUBSCRIBED_FEED_URL]
+    keep_pattern_feeds = feed_service.get_keep_pattern_feeds()
     return render_template(
         "settings.html",
+        active_feeds=active_feeds,
+        keep_pattern_feeds=keep_pattern_feeds,
         settings=settings,
         total_unread=total_unread,
         saved_count=saved_count,

@@ -78,6 +78,37 @@
             </form>
         </section>
 
+        <section class="settings-section">
+            <h3>Keep-Only Feeds</h3>
+            <p>Give a feed a regex and only its entries whose title or summary match are kept; everything else from that feed is skipped. Leave the pattern empty to clear it.</p>
+            {% for feed in keep_pattern_feeds %}
+            <form action="{{ url_for('main.set_feed_keep_pattern') }}" method="post" class="settings-form">
+                <input type="hidden" name="feed_id" value="{{ feed.id }}">
+                <div class="form-group">
+                    <label for="keep_{{ feed.id }}">{{ feed.title or feed.url }}</label>
+                    <input type="text" id="keep_{{ feed.id }}" name="pattern" value="{{ feed.keep_pattern }}">
+                </div>
+                <button type="submit" class="btn">Save</button>
+            </form>
+            {% endfor %}
+            <form action="{{ url_for('main.set_feed_keep_pattern') }}" method="post" class="settings-form">
+                <div class="form-group">
+                    <label for="keep_feed_id">Feed</label>
+                    <select id="keep_feed_id" name="feed_id" required>
+                        <option value="">Choose a feed&hellip;</option>
+                        {% for feed in active_feeds if not feed.keep_pattern %}
+                        <option value="{{ feed.id }}">{{ feed.title or feed.url }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="keep_pattern_new">Keep only entries matching</label>
+                    <input type="text" id="keep_pattern_new" name="pattern" required>
+                </div>
+                <button type="submit" class="btn">Add Keep-Only Pattern</button>
+            </form>
+        </section>
+
         {% if unsubscribed_feeds %}
         <section class="settings-section">
             <h3>Unsubscribed Feeds</h3>

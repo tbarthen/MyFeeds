@@ -26,6 +26,7 @@ class Feed:
     last_modified: str | None = None
     hidden: bool = False
     unsubscribed: bool = False
+    keep_pattern: str | None = None
 
     @classmethod
     def from_row(cls, row) -> "Feed":
@@ -44,6 +45,7 @@ class Feed:
             last_modified=row["last_modified"] if "last_modified" in keys else None,
             hidden=bool(row["hidden"]) if "hidden" in keys else False,
             unsubscribed=bool(row["unsubscribed"]) if "unsubscribed" in keys else False,
+            keep_pattern=row["keep_pattern"] if "keep_pattern" in keys else None,
         )
 
 

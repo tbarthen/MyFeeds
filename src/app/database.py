@@ -63,6 +63,7 @@ def _run_migrations(db: sqlite3.Connection) -> None:
     _add_column_if_missing(db, "feeds", "last_modified", "TEXT")
     _add_column_if_missing(db, "feeds", "hidden", "INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(db, "feeds", "unsubscribed", "INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(db, "feeds", "keep_pattern", "TEXT")
     _add_column_if_missing(db, "articles", "is_exempt", "BOOLEAN NOT NULL DEFAULT 0")
     _add_column_if_missing(db, "filter_matches", "matched_text", "TEXT")
     _backfill_seen_guids(db)

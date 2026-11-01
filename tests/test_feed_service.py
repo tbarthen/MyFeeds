@@ -409,3 +409,112 @@ class TestRefreshFeedAgeGate:
             assert second_count == 0
             titles = [a.title for a in article_service.get_articles(feed_id=added_feed.id)]
             assert "Undated" not in titles
+
+
+SCOREBOARD_PATTERN = r"scoreboard|\b\d{1,2}\.\d\s*(?:/|out of)\s*10\b"
+
+KEEP_PATTERN_ENTRIES = [
+    {"id": "sb-title", "title": "Motley Fool Scoreboard - GM", "summary": "",
+     "link": "https://example.com/1"},
+    {"id": "sb-score", "title": "Is it too Late to Buy Intel Stock?",
+     "summary": "Motley Fool analysts give Intel a 5.0/10.", "link": "https://example.com/2"},
+    {"id": "other", "title": "Is Amazon Stock Still a Buy Today?",
+     "summary": "Stock Advisor returns are 927% as of 8/5/2026.", "link": "https://example.com/3"},
+]
+
+
+class TestKeepPattern:
+    def _add_feed_with_entries(self, mock_feedparser, entries):
+        mock_feedparser.return_value = make_mock_parsed_feed(entries=entries)
+        feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+        return feed
+
+    def _titles(self, feed_id):
+        from src.app.services import article_service
+        return sorted(a.title for a in article_service.get_articles(feed_id=feed_id))
+
+    def test_setting_pattern_removes_non_matching_articles(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed = self._add_feed_with_entries(mock_feedparser, KEEP_PATTERN_ENTRIES)
+
+            removed, error = feed_service.set_feed_keep_pattern(feed.id, SCOREBOARD_PATTERN)
+
+            assert error is None
+            assert removed == 1
+            assert self._titles(feed.id) == ["Is it too Late to Buy Intel Stock?",
+                                             "Motley Fool Scoreboard - GM"]
+
+    def test_refresh_skips_non_matching_entries(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed = self._add_feed_with_entries(mock_feedparser, [])
+            feed_service.set_feed_keep_pattern(feed.id, SCOREBOARD_PATTERN)
+
+            mock_feedparser.return_value = make_mock_parsed_feed(entries=KEEP_PATTERN_ENTRIES)
+            new_count, error = feed_service.refresh_feed(feed.id)
+
+            assert error is None
+            assert new_count == 2
+            assert "Is Amazon Stock Still a Buy Today?" not in self._titles(feed.id)
+
+    def test_pattern_only_affects_its_own_feed(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            mock_feedparser.return_value = make_mock_parsed_feed(entries=KEEP_PATTERN_ENTRIES)
+            kept, _ = feed_service.add_feed("https://example.com/kept.xml")
+            other, _ = feed_service.add_feed("https://example.com/other.xml")
+
+            feed_service.set_feed_keep_pattern(kept.id, SCOREBOARD_PATTERN)
+
+            assert len(self._titles(other.id)) == 3
+
+    def test_saved_articles_survive_new_pattern(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            from src.app.database import get_db
+            feed = self._add_feed_with_entries(mock_feedparser, KEEP_PATTERN_ENTRIES)
+            db = get_db()
+            db.execute("UPDATE articles SET is_saved = 1 WHERE guid = 'other'")
+            db.commit()
+
+            removed, _ = feed_service.set_feed_keep_pattern(feed.id, SCOREBOARD_PATTERN)
+
+            assert removed == 0
+            assert len(self._titles(feed.id)) == 3
+
+    def test_clearing_pattern_lets_everything_through_again(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed = self._add_feed_with_entries(mock_feedparser, [])
+            feed_service.set_feed_keep_pattern(feed.id, SCOREBOARD_PATTERN)
+
+            removed, error = feed_service.set_feed_keep_pattern(feed.id, "  ")
+            mock_feedparser.return_value = make_mock_parsed_feed(entries=KEEP_PATTERN_ENTRIES)
+            feed_service.refresh_feed(feed.id)
+
+            assert (removed, error) == (0, None)
+            assert feed_service.get_feed_by_id(feed.id).keep_pattern is None
+            assert len(self._titles(feed.id)) == 3
+
+    def test_invalid_regex_rejected(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed = self._add_feed_with_entries(mock_feedparser, KEEP_PATTERN_ENTRIES)
+
+            removed, error = feed_service.set_feed_keep_pattern(feed.id, "([unclosed")
+
+            assert error == "Invalid regex pattern"
+            assert feed_service.get_feed_by_id(feed.id).keep_pattern is None
+            assert len(self._titles(feed.id)) == 3
+
+    def test_missing_feed_and_archive_rejected(self, app):
+        with app.app_context():
+            archive_id = feed_service.get_or_create_unsubscribed_feed()
+
+            assert feed_service.set_feed_keep_pattern(999, "x") == (0, "Feed not found")
+            assert feed_service.set_feed_keep_pattern(archive_id, "x") == (0, "Feed not found")
+
+    def test_keep_pattern_feeds_listed(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed = self._add_feed_with_entries(mock_feedparser, [])
+            assert feed_service.get_keep_pattern_feeds() == []
+
+            feed_service.set_feed_keep_pattern(feed.id, SCOREBOARD_PATTERN)
+
+            listed = feed_service.get_keep_pattern_feeds()
+            assert [(f.id, f.keep_pattern) for f in listed] == [(feed.id, SCOREBOARD_PATTERN)]

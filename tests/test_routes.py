@@ -412,3 +412,44 @@ class TestApiRoutes:
         response = client.post("/api/filters/match-count",
                                json={"pattern": "", "target": "both"})
         assert response.status_code == 400
+
+
+class TestKeepPatternRoutes:
+    def _feed_id(self, app):
+        with app.app_context():
+            return get_db().execute("SELECT id FROM feeds").fetchone()["id"]
+
+    def test_set_and_clear_keep_pattern(self, client, app, mock_feed_fetch):
+        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
+        feed_id = self._feed_id(app)
+
+        response = client.post("/feeds/keep-pattern",
+                               data={"feed_id": feed_id, "pattern": "nomatch"},
+                               follow_redirects=True)
+        assert b"removed 1 non-matching" in response.data
+        assert b'value="nomatch"' in response.data
+
+        response = client.post("/feeds/keep-pattern",
+                               data={"feed_id": feed_id, "pattern": ""},
+                               follow_redirects=True)
+        assert b"Keep-only pattern cleared" in response.data
+
+    def test_invalid_regex_flashes_error(self, client, app, mock_feed_fetch):
+        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
+
+        response = client.post("/feeds/keep-pattern",
+                               data={"feed_id": self._feed_id(app), "pattern": "(["},
+                               follow_redirects=True)
+        assert b"Invalid regex pattern" in response.data
+
+    def test_missing_feed_id_flashes_error(self, client):
+        response = client.post("/feeds/keep-pattern", data={"pattern": "x"},
+                               follow_redirects=True)
+        assert b"Pick a feed" in response.data
+
+    def test_settings_lists_feeds_for_keep_pattern(self, client, app, mock_feed_fetch):
+        client.post("/feeds/add", data={"url": "https://example.com/feed.xml"})
+
+        response = client.get("/settings")
+        assert b"Keep-Only Feeds" in response.data
+        assert b"Test Feed" in response.data
