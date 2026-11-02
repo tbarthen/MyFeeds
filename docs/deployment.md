@@ -4,8 +4,13 @@
 
 - **Instance**: `myfeeds`
 - **Zone**: `us-central1-a`
-- **External IP**: `34.61.25.130`
-- **App URL**: `http://34.61.25.130`
+- **External IP**: `34.58.83.115` (reserved static IP `myfeeds-static-ip`)
+- **App URL**: `https://myfeeds.duckdns.org`
+
+HTTPS is served by a Caddy reverse proxy (`Caddyfile` + the `caddy` service in
+`docker-compose.yml`) with an automatic Let's Encrypt cert; `http://`
+308-redirects to `https://`. DNS: `myfeeds.duckdns.org` (DuckDNS) A-records the
+static IP. Firewall rule `allow-https` opens tcp/udp 443.
 
 ## Deploy Changes
 
@@ -43,7 +48,7 @@ CLOUDSDK_AUTH_ACCESS_TOKEN="$TOKEN" gcloud compute ssh myfeeds --zone=us-central
 
 Run the session in the "Accept edits" permission mode so the token and SSH steps
 prompt for approval instead of being auto-denied. Verify with
-`curl -s http://34.61.25.130/health` and by checking that `/static/app.js` serves
+`curl -s https://myfeeds.duckdns.org/health` and by checking that `/static/app.js` serves
 the expected code.
 
 ## Prerequisites
