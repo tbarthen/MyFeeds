@@ -15,6 +15,7 @@ from src.app.models import Feed, Article
 
 FETCH_TIMEOUT = 30
 MAX_ERROR_COUNT = 3
+ERROR_RETRY_INTERVAL = timedelta(hours=6)
 USER_AGENT = "MyFeeds/1.0 (RSS Reader; +https://github.com/myfeeds)"
 ALLOWED_SCHEMES = {"http", "https"}
 
@@ -304,6 +305,24 @@ def refresh_feed(feed_id: int) -> Tuple[int, str | None]:
 REFRESH_DELAY_SECONDS = 5
 
 
+def _error_retry_due(last_fetched: datetime | None) -> bool:
+    """A feed past MAX_ERROR_COUNT is retried at most once per ERROR_RETRY_INTERVAL."""
+    if last_fetched is None:
+        return True
+    if last_fetched.tzinfo is None:
+        last_fetched = last_fetched.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - last_fetched >= ERROR_RETRY_INTERVAL
+
+
+def _mark_fetch_attempt(feed_id: int) -> None:
+    db = get_db()
+    db.execute(
+        "UPDATE feeds SET last_fetched = ? WHERE id = ?",
+        (datetime.now(timezone.utc).isoformat(), feed_id),
+    )
+    db.commit()
+
+
 def refresh_all_feeds() -> dict[int, Tuple[int, str | None]]:
     results = {}
     feeds = get_all_feeds()
@@ -311,8 +330,12 @@ def refresh_all_feeds() -> dict[int, Tuple[int, str | None]]:
         if feed.url == UNSUBSCRIBED_FEED_URL:
             continue
         if feed.fetch_error_count >= MAX_ERROR_COUNT:
-            results[feed.id] = (0, f"skipped: {feed.fetch_error_count} consecutive errors")
-            continue
+            if not _error_retry_due(feed.last_fetched):
+                results[feed.id] = (0, f"skipped: {feed.fetch_error_count} consecutive errors")
+                continue
+            # Due for a periodic retry: stamp the attempt now so a repeat failure stays
+            # skipped until the next interval. A success resets the count in refresh_feed.
+            _mark_fetch_attempt(feed.id)
         results[feed.id] = refresh_feed(feed.id)
         if i < len(feeds) - 1:
             time.sleep(REFRESH_DELAY_SECONDS)
@@ -355,7 +378,7 @@ def fetch_and_parse_feed(url: str, etag: str | None = None,
     except requests.exceptions.Timeout:
         return FeedFetchResult(None, "that site took too long to respond")
     except requests.exceptions.HTTPError as e:
-        status = e.response.status_code if e.response else "unknown"
+        status = e.response.status_code if e.response is not None else "unknown"
         if status == 404:
             return FeedFetchResult(None, "nothing found at that URL (404)")
         elif status == 403:

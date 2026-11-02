@@ -116,6 +116,63 @@ class TestFetchValidation:
                 assert result.parsed is not None
                 assert len(result.parsed.entries) == 0
 
+    def test_http_error_reads_falsy_response_status(self, app):
+        import requests
+        with app.app_context():
+            with patch("src.app.services.feed_service.requests.get") as mock_get:
+                resp = requests.Response()
+                resp.status_code = 404  # a 4xx Response is falsy but must still be read
+                mget = MagicMock(status_code=404, content=b"x", headers={})
+                mget.raise_for_status.side_effect = requests.exceptions.HTTPError(response=resp)
+                mock_get.return_value = mget
+                result = feed_service.fetch_and_parse_feed("https://gone.example.com/rss")
+                assert result.error == "nothing found at that URL (404)"
+
+
+class TestErroredFeedRetry:
+    def _set_error_state(self, feed_id, count, last_fetched):
+        from src.app.database import get_db
+        db = get_db()
+        db.execute(
+            "UPDATE feeds SET fetch_error_count = ?, last_fetched = ? WHERE id = ?",
+            (count, last_fetched.isoformat() if last_fetched else None, feed_id),
+        )
+        db.commit()
+
+    def _error_count(self, feed_id):
+        from src.app.database import get_db
+        return get_db().execute(
+            "SELECT fetch_error_count FROM feeds WHERE id = ?", (feed_id,)
+        ).fetchone()["fetch_error_count"]
+
+    def test_recent_errored_feed_is_skipped(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            self._set_error_state(feed.id, 3, datetime.now(timezone.utc) - timedelta(hours=1))
+            results = feed_service.refresh_all_feeds()
+            assert results[feed.id] == (0, "skipped: 3 consecutive errors")
+            assert self._error_count(feed.id) == 3
+
+    def test_stale_errored_feed_is_retried_and_recovers(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            self._set_error_state(feed.id, 3, datetime.now(timezone.utc) - timedelta(hours=7))
+            results = feed_service.refresh_all_feeds()
+            assert results[feed.id][1] != "skipped: 3 consecutive errors"
+            assert self._error_count(feed.id) == 0
+
+    def test_failed_retry_is_throttled_until_next_interval(self, app, mock_requests_get, mock_feedparser):
+        with app.app_context():
+            feed, _ = feed_service.add_feed("https://example.com/feed.xml")
+            self._set_error_state(feed.id, 3, datetime.now(timezone.utc) - timedelta(hours=7))
+            err = feed_service.FeedFetchResult(None, "nothing found at that URL (404)")
+            with patch("src.app.services.feed_service.fetch_and_parse_feed", return_value=err):
+                first = feed_service.refresh_all_feeds()
+                second = feed_service.refresh_all_feeds()
+            assert first[feed.id] == (0, "nothing found at that URL (404)")
+            assert self._error_count(feed.id) == 4
+            assert second[feed.id] == (0, "skipped: 4 consecutive errors")
+
 
 class TestGetFeeds:
     def test_get_all_feeds_empty(self, app):
