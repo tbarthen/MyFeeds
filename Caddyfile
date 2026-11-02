@@ -1,0 +1,3 @@
+myfeeds.duckdns.org {
+    reverse_proxy myfeeds:5000
+}

@@ -7,8 +7,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    ports:
-      - "80:5000"
+    expose:
+      - "5000"
     volumes:
       - myfeeds-data:/app/data
       - ./src/static:/app/src/static
@@ -60,6 +60,25 @@ services:
     labels:
       - "autoheal=true"
 
+  caddy:
+    image: caddy:2
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - myfeeds
+
   autoheal:
     image: willfarrell/autoheal
     restart: always
@@ -76,3 +95,5 @@ services:
 
 volumes:
   myfeeds-data:
+  caddy_data:
+  caddy_config:
