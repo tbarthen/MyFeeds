@@ -11,6 +11,7 @@ import requests
 
 from src.app.database import get_db
 from src.app.models import Feed, Article
+from src.app.services import youtube_service
 
 
 FETCH_TIMEOUT = 30
@@ -358,10 +359,37 @@ class FeedFetchResult:
         self.last_modified = last_modified
 
 
+def _fetch_youtube_feed(url: str) -> FeedFetchResult | None:
+    """Fetch a YouTube feed through the Data API.
+
+    Returns None when the URL is not a YouTube feed or no Google credentials
+    are available, so the caller falls back to plain RSS.
+    """
+    playlist_id = youtube_service.playlist_id_for_feed_url(url)
+    if playlist_id is None:
+        return None
+    access_token = youtube_service.get_access_token()
+    if access_token is None:
+        return None
+
+    try:
+        parsed = youtube_service.fetch_playlist(playlist_id, access_token)
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else "unknown"
+        return FeedFetchResult(None, f"YouTube returned an error ({status})")
+    except (requests.RequestException, ValueError) as e:
+        return FeedFetchResult(None, f"couldn't fetch from YouTube: {str(e)}")
+    return FeedFetchResult(parsed, None)
+
+
 def fetch_and_parse_feed(url: str, etag: str | None = None,
                          last_modified: str | None = None) -> FeedFetchResult:
     if not _is_safe_url(url):
         return FeedFetchResult(None, "only http and https URLs are allowed")
+
+    youtube_result = _fetch_youtube_feed(url)
+    if youtube_result is not None:
+        return youtube_result
 
     try:
         headers = {"User-Agent": USER_AGENT}

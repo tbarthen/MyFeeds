@@ -51,6 +51,28 @@ prompt for approval instead of being auto-denied. Verify with
 `curl -s https://myfeeds.duckdns.org/health` and by checking that `/static/app.js` serves
 the expected code.
 
+## YouTube feeds (keyless API access)
+
+YouTube's RSS endpoint (`/feeds/videos.xml`) answers 404, so feeds with that URL
+are read through the YouTube Data API instead (`youtube_service.py`). There is no
+API key: the app asks the VM's metadata server for the VM service account's access
+token. This needs two things on the GCP side, both one-time:
+
+- **YouTube Data API v3** enabled in the project.
+- The VM's access scopes include `https://www.googleapis.com/auth/youtube.readonly`.
+  Scopes can only be changed while the VM is stopped:
+
+```bash
+gcloud compute instances stop myfeeds --zone=us-central1-a --project=glossy-reserve-153120
+gcloud compute instances set-service-account myfeeds --zone=us-central1-a --project=glossy-reserve-153120 \
+  --service-account=223466496534-compute@developer.gserviceaccount.com \
+  --scopes=default,https://www.googleapis.com/auth/youtube.readonly
+gcloud compute instances start myfeeds --zone=us-central1-a --project=glossy-reserve-153120
+```
+
+Reapply after a VM rebuild. Without the scope a YouTube feed shows
+"YouTube returned an error (403)" in the sidebar.
+
 ## Prerequisites
 
 - Changes must be committed and pushed to `master` before deploying
