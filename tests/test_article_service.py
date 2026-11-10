@@ -236,3 +236,56 @@ class TestCleanupOldArticles:
                 (article_id,)
             ).fetchone()["n"]
             assert orphans == 0
+
+    def _read_at(self, db, guid):
+        return db.execute(
+            "SELECT read_at FROM articles WHERE guid = ?", (guid,)
+        ).fetchone()["read_at"]
+
+    def _id(self, db, guid):
+        return db.execute("SELECT id FROM articles WHERE guid = ?", (guid,)).fetchone()["id"]
+
+    def test_keeps_old_article_that_was_just_read(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "old-just-read", is_read=0, is_saved=0, age_days=30)
+            db.commit()
+
+            article_service.mark_article_read(self._id(db, "old-just-read"), is_read=True)
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 0
+
+    def test_keeps_old_articles_after_mark_all_read(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "old-a", is_read=0, is_saved=0, age_days=30)
+            self._insert(db, sample_feed, "old-b", is_read=0, is_saved=0, age_days=30)
+            db.commit()
+
+            article_service.mark_all_read()
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 0
+
+    def test_deletes_article_read_longer_ago_than_retention(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "read-long-ago", is_read=1, is_saved=0, age_days=30)
+            db.execute(
+                "UPDATE articles SET read_at = datetime('now', '-8 days') WHERE guid = 'read-long-ago'"
+            )
+            db.commit()
+
+            assert article_service.cleanup_old_articles(retention_days=7) == 1
+
+    def test_mark_unread_clears_read_time(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            self._insert(db, sample_feed, "toggled", is_read=0, is_saved=0, age_days=1)
+            db.commit()
+            article_id = self._id(db, "toggled")
+
+            article_service.mark_article_read(article_id, is_read=True)
+            assert self._read_at(db, "toggled") is not None
+
+            article_service.mark_article_read(article_id, is_read=False)
+            assert self._read_at(db, "toggled") is None

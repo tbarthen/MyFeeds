@@ -104,6 +104,18 @@ class TestFilterMatching:
 
             assert read_articles["count"] == 2
 
+    def test_filtered_old_articles_survive_cleanup(self, app, sample_articles):
+        from src.app.services import article_service
+
+        with app.app_context():
+            db = get_db()
+            db.execute("UPDATE articles SET created_at = datetime('now', '-30 days')")
+            db.commit()
+
+            filter_service.create_filter("Python Filter", r"python", "both")
+
+            assert article_service.cleanup_old_articles(article_service.RETENTION_DAYS) == 0
+
     def test_filter_title_only(self, app, sample_articles):
         with app.app_context():
             f, _ = filter_service.create_filter("Title Filter", r"breaking", "title")

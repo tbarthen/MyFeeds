@@ -54,10 +54,17 @@ def get_article_by_id(article_id: int) -> Article | None:
 
 def mark_article_read(article_id: int, is_read: bool = True) -> bool:
     db = get_db()
-    cursor = db.execute(
-        "UPDATE articles SET is_read = ? WHERE id = ?",
-        (1 if is_read else 0, article_id)
-    )
+    if is_read:
+        cursor = db.execute(
+            "UPDATE articles SET is_read = 1, "
+            "read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE id = ?",
+            (article_id,)
+        )
+    else:
+        cursor = db.execute(
+            "UPDATE articles SET is_read = 0, read_at = NULL WHERE id = ?",
+            (article_id,)
+        )
     db.commit()
     return cursor.rowcount > 0
 
@@ -71,16 +78,20 @@ def mark_all_read(
     if article_ids:
         placeholders = ",".join("?" for _ in article_ids)
         cursor = db.execute(
-            f"UPDATE articles SET is_read = 1 WHERE id IN ({placeholders}) AND is_read = 0",
+            f"UPDATE articles SET is_read = 1, read_at = CURRENT_TIMESTAMP "
+            f"WHERE id IN ({placeholders}) AND is_read = 0",
             article_ids
         )
     elif feed_id is not None:
         cursor = db.execute(
-            "UPDATE articles SET is_read = 1 WHERE feed_id = ? AND is_read = 0",
+            "UPDATE articles SET is_read = 1, read_at = CURRENT_TIMESTAMP "
+            "WHERE feed_id = ? AND is_read = 0",
             (feed_id,)
         )
     else:
-        cursor = db.execute("UPDATE articles SET is_read = 1 WHERE is_read = 0")
+        cursor = db.execute(
+            "UPDATE articles SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE is_read = 0"
+        )
 
     db.commit()
     return cursor.rowcount
@@ -123,18 +134,20 @@ def get_saved_count() -> int:
 
 
 def cleanup_old_articles(retention_days: int) -> int:
-    """Delete read, unsaved articles older than retention_days.
+    """Delete unsaved articles that were marked read over retention_days ago.
 
-    Unread articles are always kept so nothing is purged before it has been
-    seen; saved articles are always kept regardless of age. Returns the number
-    of articles deleted. Rows in filter_matches are removed automatically via
+    Retention counts from when an article was read, not when it was fetched,
+    so an old article stays recoverable from the read list for the full
+    window. Rows read before read_at was tracked fall back to created_at.
+    Unread and saved articles are always kept. Returns the number of articles
+    deleted. Rows in filter_matches are removed automatically via
     ON DELETE CASCADE.
     """
     days = int(retention_days)
     db = get_db()
     cursor = db.execute(
         "DELETE FROM articles WHERE is_saved = 0 AND is_read = 1 "
-        "AND created_at < datetime('now', ?)",
+        "AND COALESCE(read_at, created_at) < datetime('now', ?)",
         (f"-{days} days",)
     )
     db.commit()

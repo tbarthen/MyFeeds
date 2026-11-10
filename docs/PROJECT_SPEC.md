@@ -150,8 +150,9 @@ published/updated date (dated entries are handled by the refresh age gate). Casc
 
 CC should ask before assuming:
 
-1. **Article retention** — Resolved: auto-delete read, unsaved articles after 7 days
-   (`RETENTION_DAYS` in article_service). Unread and saved articles are always kept.
+1. **Article retention** — Resolved: auto-delete read, unsaved articles 7 days after
+   they were marked read (`RETENTION_DAYS` in article_service, timed from
+   `articles.read_at`). Unread and saved articles are always kept.
    Refresh is age-gated to the same window, with a seen_guids tombstone for undated
    feeds, so purged articles don't reappear.
 2. **Re-filtering** — When a new filter is added, apply to existing unread articles only, or all articles?

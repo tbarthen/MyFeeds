@@ -66,6 +66,7 @@ def _run_migrations(db: sqlite3.Connection) -> None:
     _add_column_if_missing(db, "feeds", "keep_pattern", "TEXT")
     _add_column_if_missing(db, "articles", "is_exempt", "BOOLEAN NOT NULL DEFAULT 0")
     _add_column_if_missing(db, "filter_matches", "matched_text", "TEXT")
+    _add_column_if_missing(db, "articles", "read_at", "DATETIME")
     _backfill_seen_guids(db)
 
 
@@ -121,6 +122,7 @@ CREATE TABLE IF NOT EXISTS articles (
     image_url TEXT,
     published_at DATETIME,
     is_read BOOLEAN DEFAULT 0,
+    read_at DATETIME,
     is_saved BOOLEAN DEFAULT 0,
     is_exempt BOOLEAN NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

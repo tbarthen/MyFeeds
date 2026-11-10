@@ -18,7 +18,8 @@ def _chunked_update_is_read(db, article_ids: list[int]) -> None:
         chunk = article_ids[i:i + SQLITE_VAR_LIMIT]
         placeholders = ",".join("?" for _ in chunk)
         db.execute(
-            "UPDATE articles SET is_read = 1 WHERE id IN ({})".format(placeholders),
+            "UPDATE articles SET is_read = 1, read_at = CURRENT_TIMESTAMP "
+            "WHERE id IN ({})".format(placeholders),
             chunk
         )
 
@@ -208,7 +209,7 @@ def reapply_all_filters() -> int:
     db = get_db()
 
     remarked = db.execute("""
-        UPDATE articles SET is_read = 1
+        UPDATE articles SET is_read = 1, read_at = CURRENT_TIMESTAMP
         WHERE is_read = 0 AND is_saved = 0 AND is_exempt = 0
           AND id IN (SELECT article_id FROM filter_matches)
     """)
@@ -282,7 +283,8 @@ def exempt_article(article_id: int) -> bool:
     """Rescue a false positive: drop its matches, mark unread, never filter it again."""
     db = get_db()
     cursor = db.execute(
-        "UPDATE articles SET is_exempt = 1, is_read = 0 WHERE id = ?", (article_id,)
+        "UPDATE articles SET is_exempt = 1, is_read = 0, read_at = NULL WHERE id = ?",
+        (article_id,)
     )
     if cursor.rowcount == 0:
         return False
