@@ -289,3 +289,33 @@ class TestCleanupOldArticles:
 
             article_service.mark_article_read(article_id, is_read=False)
             assert self._read_at(db, "toggled") is None
+
+
+class TestReadAtMigration:
+    def test_upgrade_restarts_retention_for_already_read_articles(self, app, sample_feed):
+        from src.app.database import _add_read_at_column
+
+        with app.app_context():
+            db = get_db()
+            db.execute("ALTER TABLE articles DROP COLUMN read_at")
+            db.execute(
+                "INSERT INTO articles (feed_id, guid, title, is_read, created_at) "
+                "VALUES (?, 'legacy-read', 'legacy-read', 1, datetime('now', '-30 days'))",
+                (sample_feed,)
+            )
+            db.execute(
+                "INSERT INTO articles (feed_id, guid, title, is_read, created_at) "
+                "VALUES (?, 'legacy-unread', 'legacy-unread', 0, datetime('now', '-30 days'))",
+                (sample_feed,)
+            )
+            db.commit()
+
+            _add_read_at_column(db)
+
+            rows = {
+                row["guid"]: row["read_at"]
+                for row in db.execute("SELECT guid, read_at FROM articles").fetchall()
+            }
+            assert rows["legacy-read"] is not None
+            assert rows["legacy-unread"] is None
+            assert article_service.cleanup_old_articles(retention_days=7) == 0

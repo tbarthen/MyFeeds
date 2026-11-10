@@ -44,16 +44,27 @@ def init_db(app: Flask) -> None:
         _run_migrations(db)
 
 
-def _add_column_if_missing(db: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+def _add_column_if_missing(db: sqlite3.Connection, table: str, column: str, decl: str) -> bool:
+    """Add the column if absent. Returns True only when it was added by this call."""
     cursor = db.execute(f"PRAGMA table_info({table})")
     columns = [row[1] for row in cursor.fetchall()]
     if column in columns:
-        return
+        return False
     try:
         db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
         db.commit()
     except sqlite3.OperationalError:
-        pass
+        return False
+    return True
+
+
+def _add_read_at_column(db: sqlite3.Connection) -> None:
+    """Start the retention clock now for articles read before read_at existed,
+    so the upgrade itself never purges an article that was only just read."""
+    if not _add_column_if_missing(db, "articles", "read_at", "DATETIME"):
+        return
+    db.execute("UPDATE articles SET read_at = CURRENT_TIMESTAMP WHERE is_read = 1")
+    db.commit()
 
 
 def _run_migrations(db: sqlite3.Connection) -> None:
@@ -66,7 +77,7 @@ def _run_migrations(db: sqlite3.Connection) -> None:
     _add_column_if_missing(db, "feeds", "keep_pattern", "TEXT")
     _add_column_if_missing(db, "articles", "is_exempt", "BOOLEAN NOT NULL DEFAULT 0")
     _add_column_if_missing(db, "filter_matches", "matched_text", "TEXT")
-    _add_column_if_missing(db, "articles", "read_at", "DATETIME")
+    _add_read_at_column(db)
     _backfill_seen_guids(db)
 
 
