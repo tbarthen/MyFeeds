@@ -13,6 +13,7 @@ _app = None
 ON_DEMAND_POLL_SECONDS = 30
 ON_DEMAND_COOLDOWN_MINUTES = 5
 CLEANUP_INTERVAL_HOURS = 6
+ARCHIVE_INTERVAL_MINUTES = 2
 
 
 def _run_refresh(trigger: str):
@@ -64,6 +65,18 @@ def cleanup_old_articles_job():
                 "Article cleanup: deleted %d articles older than %d days",
                 deleted, article_service.RETENTION_DAYS
             )
+
+
+def archive_saved_articles_job():
+    if _app is None:
+        return
+
+    with _app.app_context():
+        from src.app.services import archive_service
+
+        handled = archive_service.process_pending()
+        if handled > 0:
+            logger.info("Archive: processed %d saved articles", handled)
 
 
 def check_on_demand_refresh_job():
@@ -124,6 +137,13 @@ def init_scheduler(app):
         trigger=IntervalTrigger(hours=CLEANUP_INTERVAL_HOURS),
         id="cleanup_old_articles",
         next_run_time=datetime.now(timezone.utc) + timedelta(seconds=30),
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        archive_saved_articles_job,
+        trigger=IntervalTrigger(minutes=ARCHIVE_INTERVAL_MINUTES),
+        id="archive_saved_articles",
         replace_existing=True
     )
 

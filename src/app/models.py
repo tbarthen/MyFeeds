@@ -66,6 +66,9 @@ class Article:
     created_at: datetime | None = None
     feed_title: str | None = None
     matched_text: str | None = None
+    full_text: str | None = None
+    extract_attempts: int = 0
+    wayback_saved_at: datetime | None = None
 
     @classmethod
     def from_row(cls, row) -> "Article":
@@ -85,7 +88,10 @@ class Article:
             is_exempt=bool(row["is_exempt"]) if "is_exempt" in keys else False,
             created_at=parse_datetime(row["created_at"]),
             feed_title=row["feed_title"] if "feed_title" in keys else None,
-            matched_text=row["matched_text"] if "matched_text" in keys else None
+            matched_text=row["matched_text"] if "matched_text" in keys else None,
+            full_text=row["full_text"] if "full_text" in keys else None,
+            extract_attempts=row["extract_attempts"] if "extract_attempts" in keys else 0,
+            wayback_saved_at=parse_datetime(row["wayback_saved_at"]) if "wayback_saved_at" in keys else None,
         )
 
 

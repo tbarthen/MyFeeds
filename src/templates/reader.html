@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}{{ article.title or "Article" }} - MyFeeds{% endblock %}
+
+{% block content %}
+<main class="reader">
+    <nav class="reader-nav">
+        <a href="{{ url_for('main.saved_articles') }}" class="reader-back">&larr; Saved</a>
+    </nav>
+
+    <article class="reader-article">
+        <header class="reader-header">
+            <div class="reader-meta">
+                {% if article.published_at %}
+                <time>{{ article.published_at.strftime('%b %d, %Y') }}</time>
+                {% endif %}
+                <span>{{ article.feed_title }}</span>
+            </div>
+            <h1 class="reader-title">{{ article.title }}</h1>
+        </header>
+
+        {% if extraction_state == "pending" %}
+        <p class="reader-notice">The full article is still being fetched. Showing the feed's text for now.</p>
+        {% elif extraction_state == "failed" %}
+        <p class="reader-notice">Couldn't get the full article. Showing the feed's text; try an archived copy below.</p>
+        {% endif %}
+
+        <div class="reader-body">
+            {% for paragraph in paragraphs %}
+            <p>{{ paragraph }}</p>
+            {% else %}
+            <p class="reader-notice">No text available.</p>
+            {% endfor %}
+        </div>
+    </article>
+
+    {% if article.url %}
+    <footer class="reader-links">
+        <a href="{{ article.url }}" target="_blank" rel="noopener" class="btn-small">Original</a>
+        <a href="{{ archive_today_url }}" target="_blank" rel="noopener" class="btn-small">archive.today</a>
+        <a href="{{ wayback_url }}" target="_blank" rel="noopener" class="btn-small">Wayback</a>
+    </footer>
+    {% endif %}
+</main>
+{% endblock %}

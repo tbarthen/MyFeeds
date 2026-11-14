@@ -78,6 +78,9 @@ def _run_migrations(db: sqlite3.Connection) -> None:
     _add_column_if_missing(db, "articles", "is_exempt", "BOOLEAN NOT NULL DEFAULT 0")
     _add_column_if_missing(db, "filter_matches", "matched_text", "TEXT")
     _add_read_at_column(db)
+    _add_column_if_missing(db, "articles", "full_text", "TEXT")
+    _add_column_if_missing(db, "articles", "extract_attempts", "INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(db, "articles", "wayback_saved_at", "DATETIME")
     _backfill_seen_guids(db)
 
 
@@ -136,6 +139,9 @@ CREATE TABLE IF NOT EXISTS articles (
     read_at DATETIME,
     is_saved BOOLEAN DEFAULT 0,
     is_exempt BOOLEAN NOT NULL DEFAULT 0,
+    full_text TEXT,
+    extract_attempts INTEGER NOT NULL DEFAULT 0,
+    wayback_saved_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE,
     UNIQUE(feed_id, guid)

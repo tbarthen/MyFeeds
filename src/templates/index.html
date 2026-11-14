@@ -147,8 +147,13 @@
                         <span class="article-source">{{ article.feed_title }}</span>
                     </div>
                     <h2 class="article-title">
+                        {% if view_mode == 'saved' %}
+                        <a href="{{ url_for('main.read_article', article_id=article.id) }}"
+                           data-article-id="{{ article.id }}">{{ article.title }}</a>
+                        {% else %}
                         <a href="{{ article.url }}" target="_blank" rel="noopener"
                            data-article-id="{{ article.id }}">{{ article.title }}</a>
+                        {% endif %}
                     </h2>
                     {% if article.summary %}
                     <p class="article-summary">{{ article.summary|striptags|truncate(200) }}</p>

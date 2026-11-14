@@ -1,10 +1,11 @@
 import hmac
 
-from flask import (Blueprint, render_template, request, redirect, url_for,
+from flask import (Blueprint, abort, render_template, request, redirect, url_for,
                    jsonify, flash, Response, session, current_app)
 
 from src.app.database import get_db
-from src.app.services import feed_service, article_service, filter_service, settings_service, opml_service
+from src.app.services import (feed_service, article_service, filter_service, settings_service,
+                              opml_service, archive_service)
 
 
 bp = Blueprint("main", __name__)
@@ -435,6 +436,23 @@ def toggle_save(article_id: int):
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return jsonify({"success": True, "is_saved": new_state})
     return redirect(request.referrer or url_for("main.index"))
+
+
+@bp.route("/articles/<int:article_id>/reader")
+def read_article(article_id: int):
+    article = article_service.get_article_by_id(article_id)
+    if article is None:
+        abort(404)
+
+    fallback_text = archive_service.html_to_text(article.content or article.summary)
+    return render_template(
+        "reader.html",
+        article=article,
+        paragraphs=archive_service.to_paragraphs(article.full_text or fallback_text),
+        extraction_state=archive_service.extraction_state(article.full_text, article.extract_attempts),
+        archive_today_url=archive_service.archive_today_url(article.url) if article.url else None,
+        wayback_url=archive_service.wayback_url(article.url) if article.url else None,
+    )
 
 
 @bp.route("/saved")

@@ -36,3 +36,14 @@ Refresh work stays in the scheduler container so the web container keeps answeri
 Both containers call `init_db` on startup, which runs idempotent migrations via `_add_column_if_missing`. Races are tolerated — the second process catches `OperationalError` on duplicate ALTER TABLE.
 
 WAL mode is set in both `init_db` (Flask request path) and `get_db_connection` (standalone context manager for scripts).
+
+## Saved-article preservation
+
+`archive_saved_articles_job` runs in the scheduler container every 2 minutes and calls `archive_service.process_pending`. For up to 5 saved articles at a time it:
+
+- Downloads the original page and extracts the article text with trafilatura into `articles.full_text`. Failures increment `extract_attempts`; after 3 attempts the article is left alone.
+- Requests a Wayback Machine snapshot (`web.archive.org/save/<url>`) once and records `wayback_saved_at`.
+
+Saving an article stays instant: the web container only flips `is_saved`. Articles saved before this feature existed are picked up automatically.
+
+The Saved view links each title to `/articles/<id>/reader`, a phone-friendly text view. It shows `full_text`, falling back to the feed's content or summary, and links to the original, archive.today (`archive.ph/newest/<url>`) and Wayback copies. Extracted text is rendered as escaped plain-text paragraphs; no fetched HTML reaches the page.
