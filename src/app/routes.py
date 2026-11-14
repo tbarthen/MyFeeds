@@ -51,10 +51,12 @@ def index():
     feeds = feed_service.get_all_feeds()
     feed_id = request.args.get("feed_id", type=int)
     unread_only = request.args.get("unread", "1") == "1"
+    search_query = article_service.normalize_search(request.args.get("q"))
 
     articles = article_service.get_articles(
         feed_id=feed_id,
-        unread_only=unread_only
+        unread_only=unread_only,
+        search=search_query
     )
 
     total_unread = article_service.get_unread_count()
@@ -69,7 +71,8 @@ def index():
         unread_only=unread_only,
         total_unread=total_unread,
         saved_count=saved_count,
-        filtered_count=filtered_count
+        filtered_count=filtered_count,
+        search_query=search_query
     )
 
 
@@ -465,7 +468,8 @@ def read_article(article_id: int):
 @bp.route("/saved")
 def saved_articles():
     feeds = feed_service.get_all_feeds()
-    articles = article_service.get_articles(saved_only=True)
+    search_query = article_service.normalize_search(request.args.get("q"))
+    articles = article_service.get_articles(saved_only=True, search=search_query)
     total_unread = article_service.get_unread_count()
     saved_count = article_service.get_saved_count()
     filtered_count = filter_service.get_total_filtered_count()
@@ -479,7 +483,8 @@ def saved_articles():
         total_unread=total_unread,
         saved_count=saved_count,
         filtered_count=filtered_count,
-        view_mode="saved"
+        view_mode="saved",
+        search_query=search_query
     )
 
 

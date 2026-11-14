@@ -319,3 +319,75 @@ class TestReadAtMigration:
             assert rows["legacy-read"] is not None
             assert rows["legacy-unread"] is None
             assert article_service.cleanup_old_articles(retention_days=7) == 0
+
+
+class TestSearchArticles:
+    @pytest.fixture
+    def many_articles(self, app, sample_feed):
+        with app.app_context():
+            db = get_db()
+            for i in range(70):
+                db.execute(
+                    "INSERT INTO articles (feed_id, guid, title, summary, is_read, published_at) "
+                    "VALUES (?, ?, ?, ?, 1, ?)",
+                    (sample_feed, f"bulk-{i}", f"Filler {i}", "Nothing here",
+                     f"2026-11-{10 + i // 10:02d}T{i % 10:02d}:00:00")
+                )
+            db.execute(
+                "INSERT INTO articles (feed_id, guid, title, summary, is_read, published_at) "
+                "VALUES (?, ?, ?, ?, 1, ?)",
+                (sample_feed, "old", "Google Wallet home key", "Unlock your door",
+                 "2026-11-01T00:00:00")
+            )
+            db.commit()
+
+    def test_finds_read_article_beyond_page_limit(self, app, many_articles):
+        with app.app_context():
+            assert "Google Wallet home key" not in [a.title for a in article_service.get_articles()]
+            results = article_service.get_articles(unread_only=True, search="wallet")
+            assert [a.title for a in results] == ["Google Wallet home key"]
+
+    def test_matches_summary(self, app, many_articles):
+        with app.app_context():
+            results = article_service.get_articles(search="UNLOCK")
+            assert [a.title for a in results] == ["Google Wallet home key"]
+
+    def test_wildcards_are_literal(self, app, sample_articles):
+        with app.app_context():
+            assert article_service.get_articles(search="%") == []
+            assert article_service.get_articles(search="_") == []
+
+    def test_blank_search_is_ignored(self, app, sample_articles):
+        with app.app_context():
+            assert len(article_service.get_articles(unread_only=True, search="   ")) == 2
+
+    def test_search_respects_saved_scope(self, app, sample_articles):
+        with app.app_context():
+            results = article_service.get_articles(saved_only=True, search="Article")
+            assert [a.title for a in results] == ["Article Three"]
+
+    def test_normalize_search_caps_length(self):
+        long_query = "x" * (article_service.MAX_SEARCH_LENGTH + 50)
+        assert len(article_service.normalize_search(long_query)) == article_service.MAX_SEARCH_LENGTH
+        assert article_service.normalize_search(None) == ""
+
+
+class TestSearchRoutes:
+    def test_index_search_includes_read_articles(self, client, sample_articles):
+        body = client.get("/?q=two").get_data(as_text=True)
+        assert "Article Two" in body
+        assert "Article One" not in body
+        assert "1 result for" in body
+
+    def test_saved_search(self, client, sample_articles):
+        body = client.get("/saved?q=three").get_data(as_text=True)
+        assert "Article Three" in body
+        assert "in all saved articles" in body
+
+    def test_no_results(self, client, sample_articles):
+        body = client.get("/?q=zzz").get_data(as_text=True)
+        assert "0 results for" in body
+
+    def test_search_term_is_escaped(self, client, sample_articles):
+        body = client.get("/?q=<b>x</b>").get_data(as_text=True)
+        assert "<b>x</b>" not in body

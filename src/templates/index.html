@@ -101,17 +101,18 @@
 
     <header class="content-header">
         <button type="button" class="menu-toggle" aria-label="Menu">&#9776;</button>
-        {% if view_mode == 'saved' %}
-        <div class="search-box">
-            <input type="text" id="article-search" placeholder="Search articles..." autocomplete="off">
+        <form class="search-box" method="get" role="search"
+              action="{{ url_for('main.saved_articles') if view_mode == 'saved' else url_for('main.index') }}"
+              data-server-query="{{ search_query or '' }}">
+            {% if selected_feed_id %}<input type="hidden" name="feed_id" value="{{ selected_feed_id }}">{% endif %}
+            <input type="hidden" name="unread" value="0">
+            <input type="search" id="article-search" name="q" value="{{ search_query or '' }}"
+                   placeholder="Search articles..." autocomplete="off" enterkeyhint="search">
             <button type="button" class="search-clear" title="Clear">&times;</button>
-        </div>
+        </form>
+        {% if view_mode == 'saved' %}
         <h2 class="view-title">Saved Articles</h2>
         {% else %}
-        <div class="search-box">
-            <input type="text" id="article-search" placeholder="Search articles..." autocomplete="off">
-            <button type="button" class="search-clear" title="Clear">&times;</button>
-        </div>
         <div class="toolbar-group">
             <a href="{{ url_for('main.index', feed_id=selected_feed_id, unread=0) }}"
                class="btn-toolbar {% if not unread_only %}active{% endif %}">All</a>
@@ -125,7 +126,13 @@
     </header>
 
     <div class="article-list">
-        {% if not articles %}
+        {% if search_query %}
+        <p class="search-status">
+            {{ articles|length }} result{{ '' if articles|length == 1 else 's' }} for &ldquo;{{ search_query }}&rdquo;
+            in all {{ 'saved ' if view_mode == 'saved' }}articles
+        </p>
+        {% endif %}
+        {% if not articles and not search_query %}
         <p class="empty-state">
             {% if view_mode == 'saved' %}
             No saved articles yet. Click the star icon on any article to save it for later.
@@ -184,6 +191,7 @@
             </div>
         </article>
         {% endfor %}
+        <button type="button" class="btn-small search-all" id="searchAll" hidden>Search all articles</button>
     </div>
 
     <div class="undo-toast" id="undoToast">

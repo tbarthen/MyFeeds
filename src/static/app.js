@@ -616,16 +616,53 @@ document.addEventListener("DOMContentLoaded", function() {
     const searchInput = document.getElementById("article-search");
     const searchClear = document.querySelector(".search-clear");
 
+    const searchForm = searchInput ? searchInput.form : null;
+    const searchAllBtn = document.getElementById("searchAll");
+    const serverQuery = searchForm ? searchForm.dataset.serverQuery || "" : "";
+
+    function updateSearchAllButton() {
+        if (!searchAllBtn) return;
+        var query = searchInput.value.trim();
+        searchAllBtn.hidden = !query || query === serverQuery;
+        searchAllBtn.textContent = 'Search all articles for "' + query + '"';
+    }
+
+    function leaveServerSearch() {
+        var feedField = searchForm.querySelector('input[name="feed_id"]');
+        window.location.href = searchForm.action +
+            (feedField ? "?feed_id=" + encodeURIComponent(feedField.value) : "");
+    }
+
     if (searchInput) {
         searchInput.addEventListener("input", function() {
             const query = this.value.toLowerCase().trim();
             filterArticles(query);
+            updateSearchAllButton();
         });
+
+        if (searchForm) {
+            searchForm.addEventListener("submit", function(e) {
+                if (searchInput.value.trim()) return;
+                e.preventDefault();
+                if (serverQuery) leaveServerSearch();
+            });
+        }
+
+        if (searchAllBtn && searchForm) {
+            searchAllBtn.addEventListener("click", function() {
+                searchForm.requestSubmit();
+            });
+        }
 
         if (searchClear) {
             searchClear.addEventListener("click", function() {
+                if (serverQuery) {
+                    leaveServerSearch();
+                    return;
+                }
                 searchInput.value = "";
                 filterArticles("");
+                updateSearchAllButton();
                 searchInput.focus();
             });
         }

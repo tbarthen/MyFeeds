@@ -3,6 +3,21 @@ from src.app.models import Article
 
 
 RETENTION_DAYS = 7
+SEARCH_LIMIT = 100
+MAX_SEARCH_LENGTH = 200
+LIKE_ESCAPE = "\\"
+
+
+def normalize_search(query: str | None) -> str:
+    """Trim a search query and cap its length; empty string means no search."""
+    return (query or "").strip()[:MAX_SEARCH_LENGTH]
+
+
+def _like_pattern(query: str) -> str:
+    escaped = (query.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2)
+               .replace("%", LIKE_ESCAPE + "%")
+               .replace("_", LIKE_ESCAPE + "_"))
+    return f"%{escaped}%"
 
 
 def get_articles(
@@ -10,9 +25,13 @@ def get_articles(
     unread_only: bool = False,
     saved_only: bool = False,
     limit: int = 50,
-    offset: int = 0
+    offset: int = 0,
+    search: str | None = None
 ) -> list[Article]:
+    """List articles newest first. A search matches title or summary across
+    read and unread articles, ignoring unread_only."""
     db = get_db()
+    search = normalize_search(search)
 
     query = """
         SELECT a.*, f.title as feed_title
@@ -28,7 +47,12 @@ def get_articles(
     elif not saved_only:
         query += " AND f.hidden = 0"
 
-    if unread_only:
+    if search:
+        query += " AND (a.title LIKE ? ESCAPE ? OR a.summary LIKE ? ESCAPE ?)"
+        pattern = _like_pattern(search)
+        params.extend([pattern, LIKE_ESCAPE, pattern, LIKE_ESCAPE])
+        limit = max(limit, SEARCH_LIMIT)
+    elif unread_only:
         query += " AND a.is_read = 0"
 
     if saved_only:
