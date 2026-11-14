@@ -169,7 +169,22 @@
                 {% if article.image_url %}
                 <img class="article-thumbnail" src="{{ article.image_url }}" alt="" loading="lazy" decoding="async">
                 {% endif %}
-                <button type="button" class="btn-kebab" aria-label="Add to filter" title="Add to filter">&#x22EE;</button>
+                <div class="article-menu">
+                    <button type="button" class="btn-kebab" aria-label="More actions" title="More actions"
+                            aria-haspopup="true" aria-expanded="false">&#x22EE;</button>
+                    <div class="feed-menu-dropdown article-menu-dropdown" role="menu">
+                        <a href="{{ url_for('main.read_article', article_id=article.id) }}"
+                           class="feed-menu-item article-open-link" role="menuitem"
+                           data-article-id="{{ article.id }}">Reader</a>
+                        {% if article.url %}
+                        <a href="{{ url_for('main.open_archive_today', article_id=article.id) }}"
+                           target="_blank" rel="noopener" class="feed-menu-item article-open-link" role="menuitem"
+                           data-article-id="{{ article.id }}">archive.today</a>
+                        {% endif %}
+                        <div class="feed-menu-divider"></div>
+                        <button type="button" class="feed-menu-item btn-add-filter" role="menuitem">Add to filter</button>
+                    </div>
+                </div>
             </div>
             <div class="article-actions">
                 <a href="{{ url_for('main.read_article', article_id=article.id) }}" class="btn-small btn-reader">Reader</a>

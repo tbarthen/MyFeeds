@@ -155,11 +155,9 @@ document.addEventListener("DOMContentLoaded", function() {
         }, true);
     });
 
-    document.querySelectorAll(".btn-kebab").forEach(function(btn) {
-        btn.addEventListener("click", function(e) {
-            e.stopPropagation();
-            var article = btn.closest(".article-item");
-            if (article) openSheet(article);
+    document.querySelectorAll(".article-item").forEach(function(article) {
+        article.addEventListener("open-filter-sheet", function() {
+            openSheet(article);
         });
     });
 

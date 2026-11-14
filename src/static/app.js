@@ -255,7 +255,7 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     // Mark articles as read when clicked
-    document.querySelectorAll(".article-title a").forEach(function(link) {
+    document.querySelectorAll(".article-title a, .article-open-link").forEach(function(link) {
         link.addEventListener("click", function() {
             const articleId = this.dataset.articleId;
             if (!articleId) return;
@@ -465,32 +465,44 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     });
 
-    // ── Feed row ⋮ menu ──
-    function closeAllFeedMenus() {
-        document.querySelectorAll(".feed-menu.open").forEach(function(menu) {
-            menu.classList.remove("open");
-            var toggle = menu.querySelector(".btn-feed-menu");
-            if (toggle) toggle.setAttribute("aria-expanded", "false");
+    // ── ⋮ menus (feed rows and articles) ──
+    var MENU_SELECTOR = ".feed-menu, .article-menu";
+
+    function setMenuOpen(menu, isOpen) {
+        menu.classList.toggle("open", isOpen);
+        var article = menu.closest(".article-item");
+        if (article) article.classList.toggle("menu-open", isOpen);
+        var toggle = menu.querySelector("[aria-haspopup]");
+        if (toggle) toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    }
+
+    function closeAllMenus() {
+        document.querySelectorAll(".feed-menu.open, .article-menu.open").forEach(function(menu) {
+            setMenuOpen(menu, false);
         });
     }
 
-    document.querySelectorAll(".btn-feed-menu").forEach(function(toggle) {
+    document.querySelectorAll(".btn-feed-menu, .article-menu .btn-kebab").forEach(function(toggle) {
         toggle.addEventListener("click", function(e) {
             e.preventDefault();
             e.stopPropagation();
-            var menu = toggle.closest(".feed-menu");
+            var menu = toggle.closest(MENU_SELECTOR);
             if (!menu) return;
             var willOpen = !menu.classList.contains("open");
-            closeAllFeedMenus();
-            if (willOpen) {
-                menu.classList.add("open");
-                toggle.setAttribute("aria-expanded", "true");
-            }
+            closeAllMenus();
+            if (willOpen) setMenuOpen(menu, true);
+        });
+    });
+
+    document.querySelectorAll(".article-menu .btn-add-filter").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            var article = btn.closest(".article-item");
+            if (article) article.dispatchEvent(new CustomEvent("open-filter-sheet"));
         });
     });
 
     document.addEventListener("click", function() {
-        closeAllFeedMenus();
+        closeAllMenus();
     });
 
     // ── Unsubscribe confirm modal ──

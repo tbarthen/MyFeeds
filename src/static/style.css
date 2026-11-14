@@ -1214,6 +1214,32 @@ mark {
     color: var(--text-color);
 }
 
+.article-menu {
+    position: relative;
+    align-self: flex-start;
+    flex-shrink: 0;
+}
+
+.article-menu.open .btn-kebab {
+    opacity: 1;
+}
+
+.article-menu.open .article-menu-dropdown {
+    display: block;
+}
+
+.article-menu-dropdown {
+    min-width: 160px;
+}
+
+.article-menu-dropdown a.feed-menu-item {
+    text-decoration: none;
+}
+
+.article-item.menu-open {
+    z-index: 60;
+}
+
 @media (any-pointer: coarse), (max-width: 768px) {
     .btn-kebab {
         opacity: 1;

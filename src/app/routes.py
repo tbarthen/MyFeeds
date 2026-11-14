@@ -465,6 +465,15 @@ def read_article(article_id: int):
     )
 
 
+@bp.route("/articles/<int:article_id>/archive-today")
+def open_archive_today(article_id: int):
+    """Redirect to archive.today's newest snapshot of the article's original page."""
+    article = article_service.get_article_by_id(article_id)
+    if article is None or not article.url:
+        abort(404)
+    return redirect(archive_service.archive_today_url(article.url))
+
+
 @bp.route("/saved")
 def saved_articles():
     feeds = feed_service.get_all_feeds()

@@ -229,6 +229,25 @@ class TestReaderRoute:
         body = client.get("/?unread=0").get_data(as_text=True)
         assert f'href="/articles/{article_id}/reader"' in body
 
+    def test_article_menu_offers_reader_and_archive_today(self, app, client, feed_id):
+        article_id = insert_article(app, feed_id, is_saved=False)
+        body = client.get("/").get_data(as_text=True)
+        menu = body.split('class="article-menu"', 1)[1].split("</div>\n                </div>", 1)[0]
+        assert f'href="/articles/{article_id}/reader"' in menu
+        assert f'href="/articles/{article_id}/archive-today"' in menu
+        assert "Add to filter" in menu
+
+    def test_archive_today_route_redirects_to_newest_snapshot(self, app, client, feed_id):
+        article_id = insert_article(app, feed_id)
+        response = client.get(f"/articles/{article_id}/archive-today")
+        assert response.status_code == 302
+        assert response.headers["Location"] == "https://archive.ph/newest/https://example.com/news/story?id=7"
+
+    def test_archive_today_route_404_without_url(self, app, client, feed_id):
+        article_id = insert_article(app, feed_id, url=None)
+        assert client.get(f"/articles/{article_id}/archive-today").status_code == 404
+        assert client.get("/articles/9999/archive-today").status_code == 404
+
     def test_escapes_extracted_text(self, app, client, feed_id):
         article_id = insert_article(app, feed_id, full_text="<script>alert(1)</script>")
         body = client.get(f"/articles/{article_id}/reader").get_data(as_text=True)
