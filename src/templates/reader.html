@@ -5,7 +5,8 @@
 {% block content %}
 <main class="reader">
     <nav class="reader-nav">
-        <a href="{{ url_for('main.saved_articles') }}" class="reader-back">&larr; Saved</a>
+        <a href="{{ url_for('main.saved_articles') if article.is_saved else url_for('main.index') }}"
+           class="reader-back">&larr; Back</a>
     </nav>
 
     <article class="reader-article">

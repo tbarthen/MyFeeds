@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 MAX_EXTRACT_ATTEMPTS = 3
 BATCH_SIZE = 5
 PAGE_FETCH_TIMEOUT = 20
+ON_DEMAND_FETCH_TIMEOUT = 10
 WAYBACK_SAVE_TIMEOUT = 30
 MIN_TEXT_LENGTH = 200
 
@@ -60,12 +61,12 @@ def html_to_text(markup: str | None) -> str:
     return html.unescape(ANY_TAG_PATTERN.sub("", with_breaks))
 
 
-def fetch_page(url: str) -> str | None:
+def fetch_page(url: str, timeout: int = PAGE_FETCH_TIMEOUT) -> str | None:
     """Download a page's HTML, or None on any network or HTTP error."""
     try:
         response = requests.get(
             url,
-            timeout=PAGE_FETCH_TIMEOUT,
+            timeout=timeout,
             headers={"User-Agent": PAGE_USER_AGENT},
         )
         response.raise_for_status()
@@ -130,6 +131,17 @@ def _mark_wayback_requested(article_id: int) -> None:
     )
 
 
+def ensure_full_text(article_id: int, url: str | None, full_text: str | None,
+                     attempts: int) -> str | None:
+    """Return stored full text, extracting it now if it is missing and still worth trying."""
+    if full_text or not url or attempts >= MAX_EXTRACT_ATTEMPTS:
+        return full_text
+    text = extract_text(fetch_page(url, timeout=ON_DEMAND_FETCH_TIMEOUT), url)
+    _store_extraction(article_id, text)
+    get_db().commit()
+    return text
+
+
 def process_article(row) -> None:
     """Extract text and request a Wayback snapshot for one pending article."""
     url = row["url"]
@@ -149,10 +161,10 @@ def process_pending(limit: int = BATCH_SIZE) -> int:
     return len(rows)
 
 
-def extraction_state(full_text: str | None, attempts: int) -> str:
-    """'done', 'pending', or 'failed' for a saved article's text extraction."""
+def extraction_state(full_text: str | None, attempts: int, is_saved: bool) -> str:
+    """'done', 'pending', or 'failed'. Only saved articles are retried in the background."""
     if full_text:
         return "done"
-    if attempts < MAX_EXTRACT_ATTEMPTS:
+    if is_saved and attempts < MAX_EXTRACT_ATTEMPTS:
         return "pending"
     return "failed"

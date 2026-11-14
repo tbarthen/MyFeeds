@@ -46,4 +46,4 @@ WAL mode is set in both `init_db` (Flask request path) and `get_db_connection` (
 
 Saving an article stays instant: the web container only flips `is_saved`. Articles saved before this feature existed are picked up automatically.
 
-The Saved view links each title to `/articles/<id>/reader`, a phone-friendly text view. It shows `full_text`, falling back to the feed's content or summary, and links to the original, archive.today (`archive.ph/newest/<url>`) and Wayback copies. Extracted text is rendered as escaped plain-text paragraphs; no fetched HTML reaches the page.
+The Saved view links each title to `/articles/<id>/reader`, a phone-friendly text view; every article also has a Reader button. Opening the reader for an article with no stored text extracts it on demand (10 s fetch timeout), so unsaved articles work too; only saved articles are retried in the background or sent to the Wayback Machine. It shows `full_text`, falling back to the feed's content or summary, and links to the original, archive.today (`archive.ph/newest/<url>`) and Wayback copies. Extracted text is rendered as escaped plain-text paragraphs; no fetched HTML reaches the page.

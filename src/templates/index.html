@@ -165,6 +165,7 @@
                 <button type="button" class="btn-kebab" aria-label="Add to filter" title="Add to filter">&#x22EE;</button>
             </div>
             <div class="article-actions">
+                <a href="{{ url_for('main.read_article', article_id=article.id) }}" class="btn-small btn-reader">Reader</a>
                 <form action="{{ url_for('main.toggle_save', article_id=article.id) }}" method="post" class="inline-form">
                     <button type="submit" class="btn-star {% if article.is_saved %}active{% endif %}"
                             title="{{ 'Unsave' if article.is_saved else 'Save for later' }}">

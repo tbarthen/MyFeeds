@@ -746,4 +746,12 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     }
+
+    var readerBack = document.querySelector(".reader-back");
+    if (readerBack && history.length > 1) {
+        readerBack.addEventListener("click", function(e) {
+            e.preventDefault();
+            history.back();
+        });
+    }
 });

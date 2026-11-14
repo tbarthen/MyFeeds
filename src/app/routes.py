@@ -444,12 +444,19 @@ def read_article(article_id: int):
     if article is None:
         abort(404)
 
+    archive_service.ensure_full_text(
+        article.id, article.url, article.full_text, article.extract_attempts
+    )
+    article = article_service.get_article_by_id(article_id)
+
     fallback_text = archive_service.html_to_text(article.content or article.summary)
     return render_template(
         "reader.html",
         article=article,
         paragraphs=archive_service.to_paragraphs(article.full_text or fallback_text),
-        extraction_state=archive_service.extraction_state(article.full_text, article.extract_attempts),
+        extraction_state=archive_service.extraction_state(
+            article.full_text, article.extract_attempts, article.is_saved
+        ),
         archive_today_url=archive_service.archive_today_url(article.url) if article.url else None,
         wayback_url=archive_service.wayback_url(article.url) if article.url else None,
     )

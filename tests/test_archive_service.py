@@ -81,13 +81,14 @@ class TestTextHelpers:
     def test_html_to_text_handles_none(self):
         assert archive_service.html_to_text(None) == ""
 
-    @pytest.mark.parametrize("text, attempts, expected", [
-        ("body", 0, "done"),
-        (None, 0, "pending"),
-        (None, archive_service.MAX_EXTRACT_ATTEMPTS, "failed"),
+    @pytest.mark.parametrize("text, attempts, is_saved, expected", [
+        ("body", 0, False, "done"),
+        (None, 1, True, "pending"),
+        (None, 1, False, "failed"),
+        (None, archive_service.MAX_EXTRACT_ATTEMPTS, True, "failed"),
     ])
-    def test_extraction_state(self, text, attempts, expected):
-        assert archive_service.extraction_state(text, attempts) == expected
+    def test_extraction_state(self, text, attempts, is_saved, expected):
+        assert archive_service.extraction_state(text, attempts, is_saved) == expected
 
 
 class TestExtractText:
@@ -194,17 +195,39 @@ class TestReaderRoute:
         assert "https://web.archive.org/web/https://example.com/news/story?id=7" in body
         assert "still being fetched" not in body
 
-    def test_falls_back_to_feed_content_while_pending(self, app, client, feed_id):
+    def test_extracts_on_demand_for_unsaved_article(self, app, client, feed_id, network):
+        article_id = insert_article(app, feed_id, is_saved=False, summary="Sum")
+        body = client.get(f"/articles/{article_id}/reader").get_data(as_text=True)
+
+        assert "<p>First paragraph of the story.</p>" in body
+        assert fetch_row(app, article_id)["full_text"] == LONG_TEXT
+        network[2].assert_not_called()
+
+    def test_saved_article_falls_back_while_pending(self, app, client, feed_id, network):
+        network[1].return_value = None
         article_id = insert_article(app, feed_id, content="<p>Feed body</p>")
         body = client.get(f"/articles/{article_id}/reader").get_data(as_text=True)
         assert "<p>Feed body</p>" in body
         assert "still being fetched" in body
 
-    def test_failed_notice(self, app, client, feed_id):
+    def test_unsaved_article_failure_shows_failed_notice(self, app, client, feed_id, network):
+        network[1].return_value = None
+        article_id = insert_article(app, feed_id, is_saved=False, summary="Sum")
+        body = client.get(f"/articles/{article_id}/reader").get_data(as_text=True)
+        assert "get the full article" in body
+        assert "still being fetched" not in body
+
+    def test_no_fetch_after_max_attempts(self, app, client, feed_id, network):
         article_id = insert_article(app, feed_id, summary="Sum",
                                     extract_attempts=archive_service.MAX_EXTRACT_ATTEMPTS)
         body = client.get(f"/articles/{article_id}/reader").get_data(as_text=True)
         assert "get the full article" in body
+        network[0].assert_not_called()
+
+    def test_every_article_has_reader_button(self, app, client, feed_id):
+        article_id = insert_article(app, feed_id, is_saved=False, is_read=1)
+        body = client.get("/?unread=0").get_data(as_text=True)
+        assert f'href="/articles/{article_id}/reader"' in body
 
     def test_escapes_extracted_text(self, app, client, feed_id):
         article_id = insert_article(app, feed_id, full_text="<script>alert(1)</script>")
@@ -214,7 +237,7 @@ class TestReaderRoute:
     def test_missing_article_is_404(self, client):
         assert client.get("/articles/9999/reader").status_code == 404
 
-    def test_saved_view_links_to_reader(self, app, client, feed_id):
+    def test_saved_view_links_to_reader(self, app, client, feed_id, network):
         article_id = insert_article(app, feed_id)
         body = client.get("/saved").get_data(as_text=True)
         assert f"/articles/{article_id}/reader" in body
