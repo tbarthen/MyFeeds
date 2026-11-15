@@ -76,6 +76,21 @@ def get_article_by_id(article_id: int) -> Article | None:
     return Article.from_row(row) if row else None
 
 
+
+def get_article_by_url(url: str | None) -> Article | None:
+    """Most recently stored article whose original link is url."""
+    if not url:
+        return None
+    row = get_db().execute("""
+        SELECT a.*, f.title as feed_title
+        FROM articles a
+        JOIN feeds f ON a.feed_id = f.id
+        WHERE a.url = ?
+        ORDER BY a.id DESC LIMIT 1
+    """, (url,)).fetchone()
+    return Article.from_row(row) if row else None
+
+
 def mark_article_read(article_id: int, is_read: bool = True) -> bool:
     db = get_db()
     if is_read:

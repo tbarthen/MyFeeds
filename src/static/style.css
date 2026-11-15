@@ -1907,6 +1907,11 @@ mark {
 }
 
 .reader-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 16px;
 }
 
@@ -1948,15 +1953,18 @@ mark {
 .reader-links {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 32px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border-color);
+    gap: 8px;
 }
 
 .reader-links .btn-small {
-    padding: 10px 16px;
+    padding: 10px 14px;
     font-size: 14px;
+}
+
+.reader-links .btn-quiet {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
 }
 
 .btn-reader {

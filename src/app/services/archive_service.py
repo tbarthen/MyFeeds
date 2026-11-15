@@ -32,6 +32,7 @@ WAYBACK_LATEST = "https://web.archive.org/web/"
 WAYBACK_SAVE = "https://web.archive.org/save/"
 URL_SAFE_CHARS = ":/?&=#%+@,;~"
 
+SHARED_URL_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)
 BLOCK_TAG_PATTERN = re.compile(r"<\s*(br|/p|/div|/li|/h[1-6]|/blockquote)\b[^>]*>", re.IGNORECASE)
 ANY_TAG_PATTERN = re.compile(r"<[^>]+>")
 
@@ -86,6 +87,20 @@ def extract_text(page_html: str | None, url: str) -> str | None:
     return text
 
 
+def extract_on_demand(url: str) -> str | None:
+    """Fetch and extract a page's text with the short timeout used while a reader waits."""
+    return extract_text(fetch_page(url, timeout=ON_DEMAND_FETCH_TIMEOUT), url)
+
+
+def shared_url(url: str | None, text: str | None) -> str | None:
+    """The link from an Android share: the url field, else the first link in the text."""
+    for candidate in (url, text):
+        match = SHARED_URL_PATTERN.search(candidate or "")
+        if match:
+            return match.group(0)
+    return None
+
+
 def request_wayback_save(url: str) -> bool:
     """Ask the Wayback Machine to snapshot url. A timeout still counts as requested."""
     try:
@@ -136,7 +151,7 @@ def ensure_full_text(article_id: int, url: str | None, full_text: str | None,
     """Return stored full text, extracting it now if it is missing and still worth trying."""
     if full_text or not url or attempts >= MAX_EXTRACT_ATTEMPTS:
         return full_text
-    text = extract_text(fetch_page(url, timeout=ON_DEMAND_FETCH_TIMEOUT), url)
+    text = extract_on_demand(url)
     _store_extraction(article_id, text)
     get_db().commit()
     return text

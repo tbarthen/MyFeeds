@@ -1,9 +1,11 @@
 import hmac
+from urllib.parse import urlparse
 
 from flask import (Blueprint, abort, render_template, request, redirect, url_for,
                    jsonify, flash, Response, session, current_app)
 
 from src.app.database import get_db
+from src.app.models import Article
 from src.app.services import (feed_service, article_service, filter_service, settings_service,
                               opml_service, archive_service)
 
@@ -441,17 +443,8 @@ def toggle_save(article_id: int):
     return redirect(request.referrer or url_for("main.index"))
 
 
-@bp.route("/articles/<int:article_id>/reader")
-def read_article(article_id: int):
-    article = article_service.get_article_by_id(article_id)
-    if article is None:
-        abort(404)
-
-    archive_service.ensure_full_text(
-        article.id, article.url, article.full_text, article.extract_attempts
-    )
-    article = article_service.get_article_by_id(article_id)
-
+def _render_reader(article: Article):
+    """Render the reader view for a stored or shared article."""
     fallback_text = archive_service.html_to_text(article.content or article.summary)
     return render_template(
         "reader.html",
@@ -463,6 +456,46 @@ def read_article(article_id: int):
         archive_today_url=archive_service.archive_today_url(article.url) if article.url else None,
         wayback_url=archive_service.wayback_url(article.url) if article.url else None,
     )
+
+
+def _shared_article(url: str, title: str | None) -> Article:
+    """An unstored article for a link shared from another app, with its text extracted now."""
+    return Article(
+        id=None,
+        feed_id=0,
+        guid=url,
+        title=(title or "").strip() or url,
+        url=url,
+        feed_title=urlparse(url).netloc,
+        full_text=archive_service.extract_on_demand(url),
+        extract_attempts=1,
+    )
+
+
+@bp.route("/articles/<int:article_id>/reader")
+def read_article(article_id: int):
+    article = article_service.get_article_by_id(article_id)
+    if article is None:
+        abort(404)
+
+    archive_service.ensure_full_text(
+        article.id, article.url, article.full_text, article.extract_attempts
+    )
+    return _render_reader(article_service.get_article_by_id(article_id))
+
+
+@bp.route("/share")
+def share():
+    """Android share target: open a page shared from Chrome in the reader."""
+    url = archive_service.shared_url(request.args.get("url"), request.args.get("text"))
+    if url is None:
+        flash("Nothing to open: the share didn't include a link.", "error")
+        return redirect(url_for("main.index"))
+
+    article = article_service.get_article_by_url(url)
+    if article is not None:
+        return redirect(url_for("main.read_article", article_id=article.id))
+    return _render_reader(_shared_article(url, request.args.get("title")))
 
 
 @bp.route("/articles/<int:article_id>/archive-today")

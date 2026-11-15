@@ -97,7 +97,8 @@ def create_app(config: dict | None = None) -> Flask:
             app.url_map.bind("").match(request.path, method=request.method)
         except HTTPException:
             return None
-        return redirect(url_for("main.login", next=request.path))
+        next_path = request.full_path if request.query_string else request.path
+        return redirect(url_for("main.login", next=next_path))
 
     from src.app import routes
     app.register_blueprint(routes.bp)

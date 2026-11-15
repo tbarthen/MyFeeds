@@ -59,3 +59,12 @@ def test_wrong_method_on_real_route_does_not_redirect(auth_client):
     # cost a kilobyte of login HTML to whatever scanner sent the POST).
     resp = auth_client.post("/")
     assert resp.status_code != 302
+
+
+def test_login_redirect_keeps_shared_link(auth_client):
+    resp = auth_client.get("/share?url=https://example.com/a")
+    login_url = resp.headers["Location"]
+    assert login_url == "/login?next=/share?url%3Dhttps://example.com/a"
+
+    resp = auth_client.post(login_url, data={"password": "test-password"})
+    assert resp.headers["Location"] == "/share?url=https://example.com/a"

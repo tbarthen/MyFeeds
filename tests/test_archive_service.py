@@ -262,6 +262,48 @@ class TestReaderRoute:
         assert f"/articles/{article_id}/reader" in body
 
 
+class TestSharedUrl:
+    def test_prefers_url_field(self):
+        assert archive_service.shared_url(ARTICLE_URL, "see https://other.example/x") == ARTICLE_URL
+
+    def test_falls_back_to_link_in_text(self):
+        assert archive_service.shared_url(None, "Big story https://example.com/s?id=1 via Chrome") == \
+            "https://example.com/s?id=1"
+
+    def test_none_when_no_link(self):
+        assert archive_service.shared_url("", "just words") is None
+
+
+class TestShareRoute:
+    def test_known_article_redirects_to_its_reader(self, app, client, feed_id):
+        article_id = insert_article(app, feed_id)
+        response = client.get("/share", query_string={"text": ARTICLE_URL})
+        assert response.status_code == 302
+        assert response.headers["Location"] == f"/articles/{article_id}/reader"
+
+    def test_unknown_link_extracts_without_storing(self, app, client, feed_id, network):
+        response = client.get("/share", query_string={"url": "https://news.example.org/p/1", "title": "Shared story"})
+        body = response.get_data(as_text=True)
+
+        assert response.status_code == 200
+        assert "Shared story" in body and "news.example.org" in body
+        assert "<p>First paragraph of the story.</p>" in body
+        assert "https://archive.ph/newest/https://news.example.org/p/1" in body
+        with app.app_context():
+            assert get_db().execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 0
+
+    def test_unknown_link_failure_points_to_archive_today(self, client, feed_id, network):
+        network[1].return_value = None
+        body = client.get("/share", query_string={"url": "https://news.example.org/p/1"}).get_data(as_text=True)
+        assert "Try archive.today above" in body
+        assert "https://archive.ph/newest/https://news.example.org/p/1" in body
+
+    def test_share_without_link_returns_home(self, client):
+        response = client.get("/share", query_string={"text": "no link here"})
+        assert response.status_code == 302
+        assert response.headers["Location"] == "/"
+
+
 class TestMigration:
     def test_new_columns_exist(self, app):
         with app.app_context():

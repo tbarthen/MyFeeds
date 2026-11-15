@@ -7,6 +7,13 @@
     <nav class="reader-nav">
         <a href="{{ url_for('main.saved_articles') if article.is_saved else url_for('main.index') }}"
            class="reader-back">&larr; Back</a>
+        {% if article.url %}
+        <div class="reader-links">
+            <a href="{{ archive_today_url }}" target="_blank" rel="noopener" class="btn-small">archive.today</a>
+            <a href="{{ article.url }}" target="_blank" rel="noopener" class="btn-small btn-quiet">Original</a>
+            <a href="{{ wayback_url }}" target="_blank" rel="noopener" class="btn-small btn-quiet">Wayback</a>
+        </div>
+        {% endif %}
     </nav>
 
     <article class="reader-article">
@@ -22,25 +29,23 @@
 
         {% if extraction_state == "pending" %}
         <p class="reader-notice">The full article is still being fetched. Showing the feed's text for now.</p>
-        {% elif extraction_state == "failed" %}
-        <p class="reader-notice">Couldn't get the full article. Showing the feed's text; try an archived copy below.</p>
+        {% elif extraction_state == "failed" and paragraphs %}
+        <p class="reader-notice">Couldn't get the full article. Showing the feed's text; try archive.today above.</p>
         {% endif %}
 
         <div class="reader-body">
             {% for paragraph in paragraphs %}
             <p>{{ paragraph }}</p>
             {% else %}
-            <p class="reader-notice">No text available.</p>
+            <p class="reader-notice">
+                {%- if extraction_state == "failed" -%}
+                Couldn't get the article's text. Try archive.today above.
+                {%- else -%}
+                No text available.
+                {%- endif -%}
+            </p>
             {% endfor %}
         </div>
     </article>
-
-    {% if article.url %}
-    <footer class="reader-links">
-        <a href="{{ article.url }}" target="_blank" rel="noopener" class="btn-small">Original</a>
-        <a href="{{ archive_today_url }}" target="_blank" rel="noopener" class="btn-small">archive.today</a>
-        <a href="{{ wayback_url }}" target="_blank" rel="noopener" class="btn-small">Wayback</a>
-    </footer>
-    {% endif %}
 </main>
 {% endblock %}
